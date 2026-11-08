@@ -1,5 +1,6 @@
 
 import unittest
+import threading
 
 from server.session_manager import SessionManager
 
@@ -96,6 +97,57 @@ class TestSessionManager(unittest.TestCase):
         self.assertEqual(
             original["status"], "online"
         )
+
+    def test_concurrent_duplicate_sessions(self):
+        """Only one thread can create a session for the same user."""
+
+        thread_count = 20
+        barrier = threading.Barrier(thread_count)
+        results = []
+        results_lock = threading.Lock()
+
+        def create_session(index):
+            barrier.wait()
+
+            success = self.manager.add_session(
+                "alice",
+                "127.0.0.1",
+                50000 + index
+            )
+
+            with results_lock:
+                results.append(success)
+
+        threads = [
+            threading.Thread(
+                target=create_session,
+                args=(i,)
+            )
+            for i in range(thread_count)
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join(timeout=5)
+
+        # All threads must finish
+        self.assertTrue(
+            all(not thread.is_alive() for thread in threads)
+        )
+
+        # Exactly one session creation succeeds
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 19)
+
+        # Only one session is stored
+        self.assertEqual(len(self.manager.sessions), 1)
+
+        session = self.manager.get_session("alice")
+        self.assertIsNotNone(session)
+        self.assertEqual(session["status"], "online")
+
 
 
 if __name__ == "__main__":

@@ -258,17 +258,36 @@ class TestSessionIntegration(unittest.TestCase):
         finally:
             client.close()
 
-        # Wait for the server to process the disconnect
-        server_thread.join(timeout=3)
 
-        # Server must remove the session
-        self.assertIsNone(
-            self.server.session_manager.get_session(
-                "alice"
+        # Wait for the server to clean up the disconnected session.
+        deadline = time.monotonic() + 5
+
+        while time.monotonic() < deadline:
+            if (
+                self.server.session_manager.get_session("alice")
+                is None
+            ):
+                break
+
+            time.sleep(0.01)
+
+        # Verify session cleanup before stopping the server.
+        try:
+            self.assertIsNone(
+                self.server.session_manager.get_session("alice"),
+                "Session was not removed after connection reset"
             )
+        finally:
+            # A client disconnect must not automatically stop
+            # a multi-client server.
+            self.server.stop()
+            server_thread.join(timeout=10)
+
+        self.assertFalse(
+            server_thread.is_alive(),
+            "Server thread did not stop after stop()"
         )
 
-        self.assertFalse(server_thread.is_alive())
 
 
 

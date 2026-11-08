@@ -1,4 +1,4 @@
-
+import threading
 import unittest
 
 from server.auth_manager import AuthManager
@@ -63,6 +63,55 @@ class TestAuthManager(unittest.TestCase):
         )
         self.assertEqual(len(stored["salt"]), 16)
         self.assertEqual(len(stored["password_hash"]), 32)
+
+    def test_concurrent_duplicate_registration(self):
+        """Only one thread can register the same username."""
+
+        thread_count = 20
+        barrier = threading.Barrier(thread_count)
+
+        results = []
+        results_lock = threading.Lock()
+
+        def register_user():
+            barrier.wait()
+
+            success = self.auth.register(
+                "alice",
+                "password123"
+            )
+
+            with results_lock:
+                results.append(success)
+
+        threads = [
+            threading.Thread(target=register_user)
+            for _ in range(thread_count)
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertTrue(
+            all(not thread.is_alive() for thread in threads)
+        )
+
+        self.assertEqual(len(results), thread_count)
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 19)
+
+        self.assertEqual(len(self.auth.users), 1)
+
+        self.assertTrue(
+            self.auth.authenticate(
+                "alice",
+                "password123"
+            )
+        )
+
 
 
 if __name__ == "__main__":

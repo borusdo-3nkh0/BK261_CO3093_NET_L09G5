@@ -2,16 +2,18 @@
 import hashlib
 import hmac
 import secrets
+import threading
 
 
 class AuthManager:
-    """Manage user authentication for the server."""
+    """Manage user authentication safely across threads."""
 
     def __init__(self):
         self.users = {}
+        self._lock = threading.Lock()
 
     def register(self, username: str, password: str) -> bool:
-        """Register a new user."""
+        """Register a new user safely."""
 
         if not isinstance(username, str) or not username.strip():
             return False
@@ -19,9 +21,7 @@ class AuthManager:
         if not isinstance(password, str) or not password:
             return False
 
-        if username in self.users:
-            return False
-
+        # Generate salt and hash the password.
         salt = secrets.token_bytes(16)
 
         password_hash = hashlib.pbkdf2_hmac(
@@ -31,15 +31,20 @@ class AuthManager:
             600_000
         )
 
-        self.users[username] = {
-            "salt": salt,
-            "password_hash": password_hash
-        }
+        # Check and insert atomically.
+        with self._lock:
+            if username in self.users:
+                return False
+
+            self.users[username] = {
+                "salt": salt,
+                "password_hash": password_hash
+            }
 
         return True
 
     def authenticate(self, username: str, password: str) -> bool:
-        """Verify username and password."""
+        """Verify username and password safely."""
 
         if not isinstance(username, str):
             return False
@@ -47,19 +52,25 @@ class AuthManager:
         if not isinstance(password, str):
             return False
 
-        user = self.users.get(username)
+        # Read shared user data under the lock.
+        with self._lock:
+            user = self.users.get(username)
 
-        if user is None:
-            return False
+            if user is None:
+                return False
 
+            salt = user["salt"]
+            stored_hash = user["password_hash"]
+
+        # Perform expensive hashing outside the lock.
         password_hash = hashlib.pbkdf2_hmac(
             "sha256",
             password.encode("utf-8"),
-            user["salt"],
+            salt,
             600_000
         )
 
         return hmac.compare_digest(
             password_hash,
-            user["password_hash"]
+            stored_hash
         )
