@@ -1,5 +1,4 @@
 
-import json
 import logging
 import socket
 import threading
@@ -8,7 +7,8 @@ from server.auth_manager import AuthManager
 from server.client_handler import ClientHandler
 from server.auth_protocol_adapter import AuthProtocolAdapter
 from server.session_manager import SessionManager
-
+from server.message_router import MessageRouter
+from server.request_dispatcher import RequestDispatcher
 
 
 logger = logging.getLogger(__name__)
@@ -35,17 +35,38 @@ def receive_line(client_socket, max_length=1024):
 
 
 class SocketServer:
-    """TCP server with handshake, authentication and sessions."""
+    """Multi-client TCP server with authentication and sessions."""
 
-    def __init__(self, host="127.0.0.1", port=5000):
+    def __init__(self, host="127.0.0.1", port=5000, max_clients=20):
         self.host = host
         self.port = port
-        self.server_socket = None
-        self.client_threads = []
+        
+        if (
+            not isinstance(max_clients, int)
+            or isinstance(max_clients, bool)
+            or max_clients < 1
+        ):
+            raise ValueError("max_clients must be a positive integer")
 
+        self.max_clients = max_clients
+        self.client_semaphore = threading.BoundedSemaphore(
+            value=max_clients
+        )
+        self.server_socket = None
+
+        # Authentication components
         self.auth_manager = AuthManager()
         self.client_handler = ClientHandler(self.auth_manager)
         self.session_manager = SessionManager()
+        self.message_router = MessageRouter()
+
+        # Multi-client components
+        self.client_threads = []
+        self.client_sockets = set()
+
+        # Synchronization
+        self.clients_lock = threading.Lock()
+        self.stop_event = threading.Event()
 
     def process_auth_data(self, data: bytes) -> bytes:
         """Process an authentication request."""
@@ -65,8 +86,294 @@ class SocketServer:
 
         return AuthProtocolAdapter.encode_response(status)
 
+    
+    def send_response(self, client_socket, active_username, data):
+        """Send a response using the client's shared send lock."""
+
+        if active_username is not None:
+            return self.message_router.send_to_client(
+                active_username,
+                data
+            )
+
+        # Before LOGIN, no other thread can route messages
+        # to this socket through MessageRouter.
+        try:
+            client_socket.sendall(data)
+            return True
+        except OSError:
+            return False
+
+
+    def handle_client(self, client_socket, client_address):
+        """Handle handshake, authentication, and request classification."""
+
+        active_username = None
+
+        try:
+            with client_socket:
+                logger.info(
+                    "Client connected: %s",
+                    client_address
+                )
+
+                client_socket.settimeout(5)
+
+                # STEP 1: HANDSHAKE
+                try:
+                    data = receive_line(client_socket)
+
+                except ValueError:
+                    logger.warning("Handshake message too large")
+                    client_socket.sendall(b"ERROR\n")
+                    return
+
+                except socket.timeout:
+                    logger.warning("Client handshake timeout")
+                    return
+
+                if data is None:
+                    logger.warning(
+                        "Client disconnected during handshake"
+                    )
+                    return
+
+                if data != b"HELLO\n":
+                    logger.warning("Invalid handshake request")
+                    client_socket.sendall(b"ERROR\n")
+                    return
+
+                logger.info("Handshake request received")
+                client_socket.sendall(b"WELCOME\n")
+                logger.info("Handshake completed successfully")
+
+                # STEP 2: REQUEST LOOP
+                while not self.stop_event.is_set():
+
+                    try:
+                        request_data = receive_line(client_socket)
+
+                    except ValueError:
+                        logger.warning(
+                            "Request message too large"
+                        )
+                        self.send_response(
+                            client_socket,
+                            active_username,
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                        )
+                        break
+
+                    except socket.timeout:
+                        logger.info("Client request timeout")
+                        break
+
+                    if request_data is None:
+                        logger.info("Client disconnected")
+                        break
+
+                    try:
+                        request = RequestDispatcher.decode_request(request_data)
+                        request_type = RequestDispatcher.get_request_type(request)
+                    except ValueError:
+                        logger.warning("Invalid client request")
+                        self.send_response(
+                            client_socket,
+                            active_username,
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                        )
+                        continue
+
+                    
+                    if request_type == "MESSAGE":
+
+                        # Authentication is required for messaging.
+                        if active_username is None:
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED")
+                            )
+                            continue
+
+                        action = request["action"]
+
+                        if action == "UNICAST":
+                            recipient = request.get("recipient")
+                            message = request.get("message")
+
+                            # Validate message fields.
+                            if (
+                                not isinstance(recipient, str)
+                                or not recipient
+                                or not isinstance(message, str)
+                                or not message
+                            ):
+                                status = "INVALID_REQUEST"
+
+                            else:
+                                success = self.message_router.send_unicast(
+                                    sender=active_username,
+                                    recipient=recipient,
+                                    message=message
+                                )
+
+                                status = (
+                                    "UNICAST_SUCCESS"
+                                    if success
+                                    else "UNICAST_FAILED"
+                                )
+
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response(status)
+                            )
+                            continue
+
+                        if action == "BROADCAST":
+                            message = request.get("message")
+
+                            if not isinstance(message, str) or not message:
+                                status = "INVALID_REQUEST"
+                            else:
+                                delivered_count = self.message_router.send_broadcast(
+                                    sender=active_username,
+                                    message=message
+                                )
+
+                                status = "BROADCAST_SUCCESS"
+
+                                logger.info(
+                                    "Broadcast from %s delivered to %d clients",
+                                    active_username,
+                                    delivered_count
+                                )
+
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response(status)
+                            )
+                            continue
+
+
+                    # Preserve existing authentication validation rules.
+                    try:
+                        request = AuthProtocolAdapter.decode_request(request_data)
+                    except ValueError:
+                        logger.warning("Invalid authentication request")
+                        self.send_response(
+                            client_socket,
+                            active_username,
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                        )
+                        continue
+
+                    action = request["action"]
+                    username = request["username"]
+                    password = request["password"]
+
+                    # STEP 3: SESSION VALIDATION
+                    if action == "LOGIN":
+                        if active_username is not None:
+                            status = "ALREADY_AUTHENTICATED"
+                        elif self.session_manager.get_session(username) is not None:
+                            status = "ALREADY_LOGGED_IN"
+                        else:
+                            status = self.client_handler.process_auth_request(
+                                action, username, password
+                            )
+
+                            if status == "LOGIN_SUCCESS":
+                                session_created = self.session_manager.add_session(
+                                    username,
+                                    client_address[0],
+                                    client_address[1]
+                                )
+
+                                if not session_created:
+                                    # Another thread may have logged in concurrently.
+                                    status = "ALREADY_LOGGED_IN"
+                                else:
+                                    router_registered = (
+                                        self.message_router.register_client(
+                                            username, client_socket
+                                        )
+                                    )
+                                    if not router_registered:
+                                        self.session_manager.remove_session(username)
+                                        status = "LOGIN_FAILED"
+                                    else:
+                                        active_username = username
+                                        logger.info(
+                                            "Client registered in MessageRouter: %s",
+                                            username
+                                        )
+                    else:
+                        status = self.client_handler.process_auth_request(
+                            action, username, password
+                        )
+
+                    # STEP 4: SEND RESPONSE
+                    self.send_response(
+                        client_socket,
+                        active_username,
+                        AuthProtocolAdapter.encode_response(status)
+                    )
+
+                    logger.info(
+                        "Authentication request processed"
+                    )
+
+        except ConnectionResetError as exc:
+            if self.stop_event.is_set():
+                logger.info(
+                    "Client disconnected during server shutdown: %s",
+                    client_address
+                )
+            else:
+                logger.warning(
+                    "Client connection reset: %s",
+                    exc
+                )
+
+        except OSError:
+            if self.stop_event.is_set():
+                logger.info(
+                    "Client socket closed during shutdown: %s",
+                    client_address
+                )
+            else:
+                logger.exception(
+                    "Unexpected client socket error: %s",
+                    client_address
+                )
+
+        finally:
+            # STEP 5: SESSION AND ROUTER CLEANUP
+            if active_username is not None:
+                # Unregister before removing the session, so the same
+                # username cannot be routed to a disconnected socket.
+                self.message_router.unregister_client(active_username)
+                removed = self.session_manager.remove_session(active_username)
+
+                if removed:
+                    logger.info(
+                        "User disconnected and session removed: %s",
+                        active_username
+                    )
+
+            # Remove socket from active connections.
+            with self.clients_lock:
+                self.client_sockets.discard(client_socket)
+            
+            # Return one connection slot when the client exits.
+            self.client_semaphore.release()
+
+
     def start(self):
-        """Start TCP server and handle one client connection."""
+        """Start TCP server and accept multiple clients."""
 
         try:
             with socket.socket(
@@ -85,240 +392,136 @@ class SocketServer:
                 server_socket.bind((self.host, self.port))
                 server_socket.listen(5)
 
+                # Periodically check for shutdown.
+                server_socket.settimeout(1.0)
+
                 logger.info(
                     "Server listening on %s:%s",
                     self.host,
                     self.port
                 )
 
-                client_socket, client_address = (
-                    server_socket.accept()
-                )
-
-                with client_socket:
-                    logger.info(
-                        "Client connected: %s",
-                        client_address
-                    )
-
-                    client_socket.settimeout(5)
-
-                    active_username = None
+                # STEP 6: ACCEPT MULTIPLE CLIENTS
+                while not self.stop_event.is_set():
 
                     try:
-                        # -----------------------------
-                        # STEP 1: TCP HANDSHAKE
-                        # -----------------------------
+                        client_socket, client_address = (
+                            server_socket.accept()
+                        )
+
+                    except socket.timeout:
+                        continue
+
+                    # Register socket and start thread atomically.
+                    # This prevents stop() from missing a newly
+                    # accepted client during shutdown.
+                    
+                    with self.clients_lock:
+
+                        if self.stop_event.is_set():
+                            client_socket.close()
+                            break
+
+                        # Reject connection if all slots are occupied.
+                        if not self.client_semaphore.acquire(
+                            blocking=False
+                        ):
+                            logger.warning(
+                                "Connection limit reached (%s)",
+                                self.max_clients
+                            )
+                            client_socket.close()
+                            continue
+
+                        # Remove finished client threads.
+                        self.client_threads = [
+                            thread
+                            for thread in self.client_threads
+                            if thread.is_alive()
+                        ]
+
+                        self.client_sockets.add(client_socket)
+
+                        client_thread = threading.Thread(
+                            target=self.handle_client,
+                            args=(client_socket, client_address)
+                        )
+
+                        self.client_threads.append(client_thread)
+
                         try:
-                            data = receive_line(client_socket)
-
-                        except ValueError:
-                            logger.warning(
-                                "Handshake message too large"
-                            )
-                            client_socket.sendall(b"ERROR\n")
-                            return
-
-                        except socket.timeout:
-                            logger.warning(
-                                "Client handshake timeout"
-                            )
-                            return
-
-                        if data is None:
-                            logger.warning(
-                                "Client disconnected during handshake"
-                            )
-                            return
-
-                        if data != b"HELLO\n":
-                            logger.warning(
-                                "Invalid handshake request"
-                            )
-                            client_socket.sendall(b"ERROR\n")
-                            return
-
-                        logger.info(
-                            "Handshake request received"
-                        )
-
-                        client_socket.sendall(b"WELCOME\n")
-
-                        logger.info(
-                            "Handshake completed successfully"
-                        )
-
-                        # -----------------------------
-                        # STEP 2: AUTHENTICATION LOOP
-                        # -----------------------------
-                        while True:
-                            try:
-                                auth_data = receive_line(
-                                    client_socket
-                                )
-
-                            except ValueError:
-                                logger.warning(
-                                    "Authentication message too large"
-                                )
-
-                                client_socket.sendall(
-                                    AuthProtocolAdapter.encode_response(
-                                        "INVALID_REQUEST"
-                                    )
-                                )
-                                break
-
-                            except socket.timeout:
-                                logger.info(
-                                    "Client authentication timeout"
-                                )
-                                break
-
-                            if auth_data is None:
-                                logger.info(
-                                    "Client disconnected"
-                                )
-                                break
-
-                            # Decode the incoming request
-                            try:
-                                request = (
-                                    AuthProtocolAdapter.decode_request(
-                                        auth_data
-                                    )
-                                )
-
-                            except ValueError:
-                                logger.warning(
-                                    "Invalid authentication request"
-                                )
-
-                                client_socket.sendall(
-                                    AuthProtocolAdapter.encode_response(
-                                        "INVALID_REQUEST"
-                                    )
-                                )
-                                continue
-
-                            action = request["action"]
-                            username = request["username"]
-                            password = request["password"]
-
-                            # -----------------------------
-                            # STEP 3: SESSION VALIDATION
-                            # -----------------------------
-                            if action == "LOGIN":
-
-                                # One TCP connection can have only
-                                # one active authenticated user.
-                                if active_username is not None:
-                                    status = "ALREADY_AUTHENTICATED"
-
-                                # Reject login if this username
-                                # already has an active session.
-                                elif (
-                                    self.session_manager.get_session(
-                                        username
-                                    ) is not None
-                                ):
-                                    status = "ALREADY_LOGGED_IN"
-
-                                else:
-                                    status = (
-                                        self.client_handler
-                                        .process_auth_request(
-                                            action,
-                                            username,
-                                            password
-                                        )
-                                    )
-
-                                    # Create session only after
-                                    # successful authentication.
-                                    if status == "LOGIN_SUCCESS":
-                                        ip, port = client_address
-
-                                        created = (
-                                            self.session_manager
-                                            .add_session(
-                                                username,
-                                                ip,
-                                                port
-                                            )
-                                        )
-
-                                        if created:
-                                            active_username = username
-
-                                            logger.info(
-                                                "User session created: %s",
-                                                username
-                                            )
-
-                                        else:
-                                            status = "ALREADY_LOGGED_IN"
-
-                            else:
-                                # Handle REGISTER or unknown actions
-                                status = (
-                                    self.client_handler
-                                    .process_auth_request(
-                                        action,
-                                        username,
-                                        password
-                                    )
-                                )
-
-                            # -----------------------------
-                            # STEP 4: SEND RESPONSE
-                            # -----------------------------
-                            auth_response = (
-                                AuthProtocolAdapter.encode_response(
-                                    status
-                                )
-                            )
-
-                            client_socket.sendall(
-                                auth_response
-                            )
-
-                            logger.info(
-                                "Authentication request processed"
-                            )
-
-                    finally:
-                        # -----------------------------
-                        # STEP 5: SESSION CLEANUP
-                        # -----------------------------
-                        if active_username is not None:
-                            removed = (
-                                self.session_manager.remove_session(
-                                    active_username
-                                )
-                            )
-
-                            if removed:
-                                logger.info(
-                                    "User disconnected and "
-                                    "session removed: %s",
-                                    active_username
-                                )
-
-                            active_username = None
+                            client_thread.start()
+                        except Exception:
+                            self.client_threads.remove(client_thread)
+                            self.client_sockets.discard(client_socket)
+                            client_socket.close()
+                            self.client_semaphore.release()
+                            raise
 
 
-        except ConnectionResetError as exc:
-            logger.warning(
-                "Client connection reset: %s",
-                exc
-            )
+
+                    logger.info(
+                        "Client thread started: %s",
+                        client_thread.name
+                    )
 
         except OSError:
-            logger.exception(
-                "Socket server error"
-            )
+            if self.stop_event.is_set():
+                logger.info(
+                    "Server stopped during shutdown"
+                )
+            else:
+                logger.exception("Socket server error")
 
         finally:
             self.server_socket = None
-            logger.info("Server stopped")
+            logger.info("Server stopped accepting clients")
+
+    def stop(self):
+        """Request shutdown and wait for client threads."""
+
+        logger.info("Server shutdown requested")
+
+        # STEP 1: Atomically signal shutdown and snapshot clients.
+        with self.clients_lock:
+            self.stop_event.set()
+
+            client_sockets = list(self.client_sockets)
+            client_threads = list(self.client_threads)
+
+        # STEP 2: Interrupt blocking socket operations.
+        # Client threads close their own sockets.
+        for client_socket in client_sockets:
+            try:
+                client_socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+        # STEP 3: Wait for client threads to finish.
+        current_thread = threading.current_thread()
+
+        for client_thread in client_threads:
+
+            if client_thread is current_thread:
+                continue
+
+            if client_thread.ident is None:
+                continue
+
+            client_thread.join(timeout=5)
+
+            if client_thread.is_alive():
+                logger.warning(
+                    "Client thread did not stop: %s",
+                    client_thread.name
+                )
+
+        # STEP 4: Remove finished threads from tracking.
+        with self.clients_lock:
+            self.client_threads = [
+                thread
+                for thread in self.client_threads
+                if thread.is_alive()
+            ]
+
+        logger.info("Server shutdown procedure completed")
