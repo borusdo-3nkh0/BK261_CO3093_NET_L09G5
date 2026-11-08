@@ -1,4 +1,4 @@
-
+import time
 import logging
 import socket
 import threading
@@ -14,12 +14,32 @@ from server.request_dispatcher import RequestDispatcher
 logger = logging.getLogger(__name__)
 
 
-def receive_line(client_socket, max_length=1024):
-    """Receive one newline-terminated TCP message."""
+def receive_line(client_socket, max_length=1024, timeout=None):
+    """Receive one newline-terminated TCP message within a deadline."""
+
+    if timeout is not None:
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not 0 < timeout < float("inf")
+        ):
+            raise ValueError("timeout must be a positive finite number")
+
+        deadline = time.monotonic() + timeout
+    else:
+        deadline = None
 
     data = bytearray()
 
     while True:
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 0:
+                raise socket.timeout("Receive deadline exceeded")
+
+            client_socket.settimeout(remaining)
+
         chunk = client_socket.recv(1)
 
         if not chunk:
@@ -37,9 +57,29 @@ def receive_line(client_socket, max_length=1024):
 class SocketServer:
     """Multi-client TCP server with authentication and sessions."""
 
-    def __init__(self, host="127.0.0.1", port=5000, max_clients=20):
+    def __init__(
+    self,
+    host="127.0.0.1",
+    port=5000,
+    max_clients=20,
+    handshake_timeout=5.0,
+    idle_timeout=60.0,
+):
         self.host = host
         self.port = port
+        for name, value in (
+            ("handshake_timeout", handshake_timeout),
+            ("idle_timeout", idle_timeout),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not 0 < value < float("inf")
+            ):
+                raise ValueError(f"{name} must be a positive finite number")
+
+        self.handshake_timeout = float(handshake_timeout)
+        self.idle_timeout = float(idle_timeout)
         
         if (
             not isinstance(max_clients, int)
@@ -117,11 +157,14 @@ class SocketServer:
                     client_address
                 )
 
-                client_socket.settimeout(5)
+                client_socket.settimeout(self.handshake_timeout)
 
                 # STEP 1: HANDSHAKE
                 try:
-                    data = receive_line(client_socket)
+                    data = receive_line(
+                        client_socket,
+                        timeout=self.handshake_timeout
+                    )
 
                 except ValueError:
                     logger.warning("Handshake message too large")
@@ -146,12 +189,22 @@ class SocketServer:
                 logger.info("Handshake request received")
                 client_socket.sendall(b"WELCOME\n")
                 logger.info("Handshake completed successfully")
+                # Switch from handshake timeout to idle timeout.
+                client_socket.settimeout(self.idle_timeout)
+
+                logger.info(
+                    "Client idle timeout configured: %.1f seconds",
+                    self.idle_timeout
+                )
 
                 # STEP 2: REQUEST LOOP
                 while not self.stop_event.is_set():
 
                     try:
-                        request_data = receive_line(client_socket)
+                        request_data = receive_line(
+                            client_socket,
+                            timeout=self.idle_timeout
+                        )
 
                     except ValueError:
                         logger.warning(
