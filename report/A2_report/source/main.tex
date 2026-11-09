@@ -23,12 +23,12 @@
 % \usepackage[english]{babel}
 
 % Vietnamese only
-% \usepackage[T5]{fontenc}
-% \usepackage[vietnamese]{babel}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
 
 % Bilingual (Default - Vietnamese + English)
-\usepackage[T1,T5]{fontenc}
-\usepackage[vietnamese,english]{babel}
+% \usepackage[T1,T5]{fontenc}
+% \usepackage[vietnamese,english]{babel}
 
 %% --- Font ---
 
@@ -55,25 +55,25 @@
 
 % USAGE: Uncomment the modules you need.
 \input{Preamble/styling.tex}            % typography, headings, header/footer, TOC, lists
-% \input{Preamble/math.tex}               % math: amsmath, siunitx, shortcuts
-% \input{Preamble/cs.tex}                 % CS: listings, algorithm, pseudocode
+\input{Preamble/math.tex}               % math: amsmath, siunitx, shortcuts
+\input{Preamble/cs.tex}                 % CS: listings, algorithm, pseudocode
 % \input{Preamble/citation_ieee.tex}      % citation style: IEEE [1][2]
 % \input{Preamble/citation_apa.tex}       % citation style: APA (Author, year)
 
 %% --- Document Info ---
 
 % USAGE: Fill in values below. These are used in the cover page and header.
-\newcommand{\docAuthor}     {Author}        % full name
-\newcommand{\docAuthorId}   {Author Id}     % MSSV tác giả
-\newcommand{\docGroup}      {Group}         % group name or number
-\newcommand{\docTitle}      {Title}         % document title
+\newcommand{\docAuthor}     {}        % full name
+\newcommand{\docAuthorId}   {}     % MSSV tác giả
+\newcommand{\docGroup}      {5}         % group name or number
+\newcommand{\docTitle}      {Assignment 2: Network Design and Simulation for a Critical Large Hospital}         % document title
 \newcommand{\docDate}       {\today}        % submission date
 
-\newcommand{\docCourse}     {Course}        % course name
-\newcommand{\docCourseCode} {Course Code}   % course code
-\newcommand{\docClass}      {Class Code}    % class code
-\newcommand{\docInstructor} {Instructor}    % supervising lecturer
-\newcommand{\docFaculty}    {Faculty}       % faculty / department
+\newcommand{\docCourse}     {Mạng máy tính}        % course name
+\newcommand{\docCourseCode} {CO3039}   % course code
+\newcommand{\docClass}      {L09}    % class code
+\newcommand{\docInstructor} {Bùi Xuân Giang}    % supervising lecturer
+\newcommand{\docFaculty}    {Khoa Khoa học và Kỹ thuật Máy tính}       % faculty / department
 
 % PDF metadata (auto-filled from document info above)
 \hypersetup{
@@ -95,7 +95,7 @@
 \input{cover.tex}
 
 %--- Contribution Table ---
-% \input{contribution.tex}
+\input{contribution.tex}
 
 %--- Table of contents ---
 \input{Preamble/toc.tex}
