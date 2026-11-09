@@ -1,1 +1,142 @@
-\section{Content 1}
+\section{Phân tích yêu cầu hệ thống mạng}
+Công ty Tư vấn Máy tính \& Xây dựng (CCC) được yêu cầu thiết kế một mạng lưới máy tính triển khai ở trụ sở chính (TP. Hồ Chí Mình) và 2 chi nhánh (đường Điện Biên Phủ và đường Bà Huyện Thanh Quan) cho một bệnh viện được xây dựng.
+
+\subsection{Tổng quan các cơ sở triển khai}
+\subsubsection{Trụ sở chính}
+Quy mô của trụ sở chính:
+\begin{itemize}
+    \item 2 tòa nhà A và B, mỗi tòa 5 tầng, mỗi tầng 10 phòng.
+    \item 600 máy trạm (workstation).
+    \item 10 máy chủ (server).
+    \item Tối thiểu 12 thiết bị mạng, chưa bao gồm các thiết bị bảo mật đặc thù.
+\end{itemize}
+
+Trung tâm dữ liệu (data center), phòng IT, và phòng cáp trung tâm (cabling central local) được bố trí tách biệt, cách khu vực tòa A và B khoảng 50m.
+
+Kết nối không dây phải phủ sóng cho toàn bộ khu vực trụ sở.
+
+\subsubsection{Chi nhánh ĐBP và BHTQ}
+Quy mô cho từng cơ sở:
+\begin{itemize}
+    \item 260 máy trạm (workstation).
+    \item 2 máy chủ (server).
+    \item Tối thiểu 5 thiết bị mạng.
+\end{itemize}
+
+Tòa nhà chi nhánh có 2 tầng, tầng 1 gồm 1 phòng IT và 1 phòng cáp trung tâm.
+
+\subsection{Phân tích yêu cầu hạ tầng mạng}
+Sử dụng các công nghệ mạng được yêu cầu cho cơ sở hạ tầng mạng:
+\begin{itemize}
+    \item Kết nối có dây và không dây.
+    \item Cáp sợi quang (GPON).
+    \item Giga Ethernet các tốc độ 1GbE, 10GbE hoặc 40GbE.
+    \item VLAN dùng phân chia mạng theo từng Khoa/Phòng ban.
+\end{itemize}
+
+Kết nối WAN và Internet:
+\begin{itemize}
+    \item Trụ sở chính kết nối với chi nhánh ĐBP và BHTQ bằng 2 kênh truyền riêng (leased line).
+    \item Có thể dùng SD-WAN hoặc MPLS để triển khai kết nối WAN.
+    \item Trụ sở chính dùng kết nối Dual DSL (2xDSL) đến Internet, có cơ chế cân bằng tải (load balancing). Tất cả lưu lượng truy cập vào Internet đều đi qua mạng con trụ sở chính.
+    \item Đề xuất cấu hình VPN kết nối site-to-site và kết nối từ xa (remote access) vào mạng LAN của bệnh viện.
+    \item Đề xuất hệ thống camera giám sát cho công ty.
+\end{itemize}
+
+
+\subsection{Phân tích yêu cầu ứng dụng và dịch vụ}
+Bệnh viện sử dụng kết hợp các phần mềm được cấp phép và các phần mềm có mã nguồn mở gồm:
+\begin{itemize}
+    \item Các phần mềm hệ thống bệnh viện: HIS, RIS - PACS, LIS, CRM, etc.
+    \item Ứng dụng văn phòng.
+    \item Ứng dụng client-server.
+    \item Ứng dụng đa phương tiện.
+    \item Cơ sở dữ liệu.
+\end{itemize}
+
+
+\subsection{Phân tích yêu cầu phi chức năng}
+Hệ thống cần đáp ứng các yêu cầu phi chức năng như sau:
+\begin{itemize}
+    \item Khả năng mở rộng hệ thống mạng.
+    \item Bảo mật cao: tường lửa, IPS/IDS, phishing detection.
+    \item Tính sẵn sàng cao (HA).
+    \item Khả năng phục hồi khi xảy ra sự cố.
+    \item Khả năng nâng cấp hệ thống.
+\end{itemize}
+
+
+\subsection{Phân tích workload và giờ cao điểm}
+
+\subsection{Xác định vùng có tải mạng cao}
+
+
+
+
+
+\subsubsection{Trụ sở chính}
+Quy mô cơ sở:
+\begin{itemize}
+    \item 2 tòa nhà A và B, mỗi tòa 5 tầng, mỗi tầng 10 phòng.
+    \item 600 máy trạm (workstation).
+    \item 10 máy chủ (server).
+    \item Tối thiểu 12 thiết bị mạng cốt lõi, chưa bao gồm các thiết bị bảo mật đặc thù.
+\end{itemize}
+
+Trung tâm dữ liệu (data center), phòng IT, và phòng cáp trung tâm (cabling central local) được bố trí tách biệt, cách khu vực tòa A và B khoảng 50m.
+
+Kết nối không dây phải phủ sóng cho toàn bộ khu vực trụ sở.
+
+Sử dụng các công nghệ mạng được yêu cầu cho cơ sở hạ tầng mạng:
+\begin{itemize}
+    \item Kết nối có dây và không dây.
+    \item Cáp sợi quang (GPON).
+    \item Giga EthernetL các tốc độ 1GbE, 10GbE hoặc 40GbE.
+    \item VLAN dùng phân chia mạng theo từng Khoa/Phòng ban.
+\end{itemize}
+
+Kết nối WAN và Internet:
+\begin{itemize}
+    \item Trụ sở chính kết nối với chi nhánh ĐBP và BHTQ bằng 2 kênh truyền riêng (leased line).
+    \item Có thể dùng SD-WAN hoặc MPLS để triển khai kết nối WAN.
+    \item Trụ sở chính dùng kết nối Dual DSL (2xDSL) đến Internet, có cơ chế cân bằng tải (load balancing). Tất cả lưu lượng truy cập vào Internet đều đi qua mạng con trụ sở chính.
+    \item Đề xuất cấu hình VPN kết nối site-to-site và kết nối từ xa (remote access) vào mạng LAN của bệnh viện.
+    \item Đề xuất hệ thống camera giám sát cho công ty.
+\end{itemize}
+
+Các hệ thống và yêu cầu phi chức năng:
+\begin{itemize}
+    \item Các phần mềm hệ thống bệnh viện: HIS, RIS - PACS, LIS, CRM, etc.
+    \item Các ứng dụng đa phương tiện, client-server, văn phòng và cơ sở dữ liệu.
+    \item Khả năng mở rộng hệ thống mạng.
+    \item Bảo mật cao: tường lửa, IPS/IDS, phishing detection.
+    \item Tính sẳn sàng cao (HA), khả năng phục hồi khi xảy ra sự cố và dễ nâng cấp.
+\end{itemize}
+
+\subsubsection{Chi nhánh khác}
+Quy mô cơ sở:
+\begin{itemize}
+    \item 260 máy trạm (workstation).
+    \item 2 máy chủ (server).
+    \item Tối thiểu 5 thiết bị mạng.
+\end{itemize}
+Tòa nhà chi nhánh có 2 tầng, tầng 1 gồm 1 phòng IT và 1 phòng cáp trung tâm.
+
+
+
+
+
+
+
+
+
+
+\subsection{Checklist khảo sát}
+
+\subsection{Vùng tải cao và load balancing}
+
+\subsection{Cấu trúc mạng}
+
+\subsection{Phân vùng bảo mật (server farm, DMZ, firewall)}
+
+\subsection{Thiết kế Wi-Fi}
