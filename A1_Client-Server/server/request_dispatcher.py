@@ -7,6 +7,7 @@ class RequestDispatcher:
 
     AUTH_ACTIONS = {"REGISTER", "LOGIN"}
     MESSAGE_ACTIONS = {"UNICAST", "BROADCAST"}
+    USER_ACTIONS = {"LIST_ONLINE"}
 
     @classmethod
     def decode_request(cls, data: bytes) -> dict:
@@ -28,7 +29,13 @@ class RequestDispatcher:
         if not isinstance(action, str):
             raise ValueError("Invalid action")
 
-        if action not in cls.AUTH_ACTIONS | cls.MESSAGE_ACTIONS:
+        supported_actions = (
+            cls.AUTH_ACTIONS
+            | cls.MESSAGE_ACTIONS
+            | cls.USER_ACTIONS
+        )
+
+        if action not in supported_actions:
             raise ValueError("Unsupported action")
 
         return request
@@ -47,5 +54,8 @@ class RequestDispatcher:
 
         if action in cls.MESSAGE_ACTIONS:
             return "MESSAGE"
+
+        if action in cls.USER_ACTIONS:
+            return "USER"
 
         raise ValueError("Unsupported action")

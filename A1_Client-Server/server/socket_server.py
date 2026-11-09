@@ -2,6 +2,7 @@ import time
 import logging
 import socket
 import threading
+import json
 
 from server.auth_manager import AuthManager
 from server.client_handler import ClientHandler
@@ -238,6 +239,38 @@ class SocketServer:
                         continue
 
                     
+                    # Handle authenticated user requests.
+                    if request_type == "USER":
+
+                        if active_username is None:
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response(
+                                    "AUTH_REQUIRED"
+                                )
+                            )
+                            continue
+
+                        if request["action"] == "LIST_ONLINE":
+                            online_users = sorted(
+                                self.message_router.get_online_users()
+                            )
+
+                            response = {
+                                "status": "LIST_ONLINE_SUCCESS",
+                                "users": online_users,
+                            }
+
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                (
+                                    json.dumps(response) + "\n"
+                                ).encode("utf-8")
+                            )
+                            continue
+
                     if request_type == "MESSAGE":
 
                         # Authentication is required for messaging.
