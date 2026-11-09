@@ -1,0 +1,21 @@
+%% ============================================================
+%% FILE: toc.tex
+%% DESC: Table of contents block — use \insert in main.tex after cover
+%% ============================================================
+
+\clearpage
+\pagenumbering{gobble}
+
+\begingroup
+    \setstretch{1.4}
+    \vspace*{-2.5cm}            % adjust if TOC starts too high or too low
+    \hypersetup{
+        linkcolor = colorText}  % USAGE: colorText (dark) or colorTextSoft (muted)
+    \tableofcontents
+\endgroup
+
+\thispagestyle{empty}
+\clearpage
+
+\pagenumbering{arabic}
+\setcounter{page}{1}

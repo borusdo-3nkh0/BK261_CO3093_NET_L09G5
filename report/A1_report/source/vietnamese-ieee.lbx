@@ -1,0 +1,41 @@
+\ProvidesFile{vietnamese-ieee.lbx}[\abx@lbxid]
+\InheritBibliographyExtras{english}
+
+\DeclareBibliographyStrings{%
+  bibliography   = {{Tài liệu tham khảo}{Tài liệu tham khảo}},
+  references     = {{Tài liệu tham khảo}{Tài liệu tham khảo}},
+  shorthands     = {{Danh sách viết tắt}{Viết tắt}},
+  editor         = {{biên tập}{bt\adddot}},
+  editors        = {{biên tập}{bt\adddot}},
+  translator     = {{dịch}{dịch}},
+  and            = {{và}{và}},
+  andothers      = {{và các cộng sự}{et~al\adddot}},
+  in             = {{trong}{trong}},
+  volume         = {{tập}{t\adddot}},
+  jourvol        = {{tập}{t\adddot}},
+  number         = {{số}{s\adddot}},
+  page           = {{trang}{tr\adddot}},
+  pages          = {{trang}{tr\adddot}},
+  chapter        = {{chương}{ch\adddot}},
+  edition        = {{lần xuất bản}{lxb\adddot}},
+  urlseen        = {{truy cập ngày}{truy cập ngày}},
+  nodate         = {{không rõ ngày}{k\adddot r\adddot n\adddot}},
+}
+
+\DeclareBibliographyExtras{%
+  \protected\def\mkbibmonth#1{\ifcase#1
+    \or tháng 1\or tháng 2\or tháng 3\or tháng 4%
+    \or tháng 5\or tháng 6\or tháng 7\or tháng 8%
+    \or tháng 9\or tháng 10\or tháng 11\or tháng 12%
+  \fi}%
+  \protected\def\mkbibdatelong#1#2#3{%
+    \iffieldundef{#3}{}%
+      {\stripzeros{\thefield{#3}}\space}%
+    \iffieldundef{#2}{}%
+      {\mkbibmonth{\thefield{#2}}\space}%
+    \iffieldundef{#1}{}%
+      {\thefield{#1}}%
+  }%
+}
+
+\endinput

@@ -1,0 +1,83 @@
+%% ============================================================
+%% FILE: citation_apa.tex
+%% DESC: APA 7th edition citation style via biblatex
+%% ============================================================
+
+%% --- Packages ---
+
+\usepackage[
+    autostyle = false,
+    style     = english,
+]{csquotes}                             % smart quotes; required by biblatex
+
+\usepackage[
+    backend      = biber,              % NOTE: requires biber, not bibtex
+    style        = apa,                % APA 7th edition
+    sorting      = nyt,                % sort: Name → Year → Title
+    doi          = true,
+    url          = true,
+    isbn         = false,
+    eprint       = false,
+    maxcitenames = 2,                  % show up to 2 authors before et al. in citations
+    mincitenames = 1,
+    maxbibnames  = 20,                 % show all authors in bibliography
+]{biblatex}
+
+%% --- Language Mapping ---
+
+% suppress "Retrieved from" noise in both languages
+\DeclareLanguageMapping{english}{english-apa}
+\DeclareLanguageMapping{vietnamese}{vietnamese-apa}
+
+%% --- URL Line Breaking ---
+
+\setcounter{biburllcpenalty}{7000}
+\setcounter{biburlucpenalty}{8000}
+\setcounter{biburlnumpenalty}{9000}
+
+%% --- Bibliography Heading ---
+
+% matches \section* style from styling.tex
+\defbibheading{bibliography}[\bibname]{%
+    \section*{#1}%
+    \addcontentsline{toc}{section}{#1}%
+    \markboth{#1}{#1}%
+}
+
+%% --- Citation Aliases ---
+
+% USAGE:
+%    \citep{key}   →  (Author, year)   parenthetical
+%    \citet{key}   →  Author (year)    narrative / textual
+\newcommand{\citep}[1]{\parencite{#1}}
+\newcommand{\citet}[1]{\textcite{#1}}
+
+%% --- Bibliography Appearance ---
+
+\renewcommand*{\bibfont}{\small}
+\setlength{\bibhang}{0.5in}            % hanging indent — APA standard
+
+%% ============================================================
+%% HOW TO USE
+%% ============================================================
+%%  In main.tex:
+%%
+%%    \addbibresource{refs.bib}          % in preamble
+%%
+%%    \citep{key}                        % → (Author, 2024)
+%%    \citet{key}                        % → Author (2024)
+%%    \cite{key}                         % → (Author, 2024)  same as \citep
+%%    \parencite{key}                    % → (Author, 2024)  explicit form
+%%    \textcite{key}                     % → Author (2024)   explicit form
+%%    \footcite{key}                     % → footnote citation
+%%
+%%    \printbibliography
+%%    \printbibliography[title={References}]
+%%
+%%  Compile order:
+%%    pdflatex → biber → pdflatex → pdflatex
+%%
+%%  Common entry types in refs.bib:
+%%    @article, @book, @incollection, @inproceedings,
+%%    @online (use urldate field), @techreport
+%% ============================================================
