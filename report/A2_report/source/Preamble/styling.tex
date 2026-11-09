@@ -52,12 +52,12 @@
 
 % Subsubsection (Heading 3): left, italic, normal size
 \titleformat{\subsubsection}
-    {\normalfont\normalsize\itshape}
+    {\normalfont\normalsize\bfseries\itshape}
     {\thesubsubsection.}
     {0.5em}
     {}
 
-\titlespacing{\subsubsection}{0pt}{1em}{0.5em}
+\titlespacing{\subsubsection}{0pt}{1em}{0em}
 
 %% --- Header and Footer ---
 
@@ -113,14 +113,14 @@
 %% --- Lists ---
 
 % Itemize
-\setlist[itemize,1]{label=\textbullet,  itemindent=28pt}
-\setlist[itemize,2]{label=\textendash,  itemindent=28pt}
-\setlist[itemize,3]{label=$\ast$,       itemindent=28pt}
+\setlist[itemize,1]{label=\textbullet,  itemindent=14pt}
+\setlist[itemize,2]{label=\textendash,  itemindent=14pt}
+\setlist[itemize,3]{label=$\ast$,       itemindent=14pt}
 
 % Enumerate
-\setlist[enumerate,1]{label=(\arabic*), itemindent=28pt}
-\setlist[enumerate,2]{label=(\alph*),   itemindent=28pt}
-\setlist[enumerate,3]{label=(\roman*),  itemindent=28pt}
+\setlist[enumerate,1]{label=(\arabic*), itemindent=14pt}
+\setlist[enumerate,2]{label=(\alph*),   itemindent=14pt}
+\setlist[enumerate,3]{label=(\roman*),  itemindent=14pt}
 
 % Reduce spacing between items
 \setlist{noitemsep, topsep=0.5em, parsep=0pt}
