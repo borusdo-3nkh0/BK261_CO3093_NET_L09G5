@@ -67,76 +67,38 @@ Hệ thống cần đáp ứng các yêu cầu phi chức năng như sau:
 
 
 \subsection{Phân tích workload và giờ cao điểm}
+Hệ thống mạng của bệnh viện có khối lượng lưu lượng dữ liệu tập trung chủ yếu vào hai khoảng thời gian cao điểm trong ngày, bao gồm 9:00--11:00 và 15:00--16:00. Ước tính khoảng 80\% workload của hệ thống phát sinh trong các khoảng thời gian này.
+
+Các thông số lưu lượng được cung cấp như sau:
+\begin{itemize}
+    \item Máy chủ (server):
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 1000 MB/ngày.
+        \item Lưu lượng tải lên (upload): 2000 MB/ngày.
+    \end{itemize}
+
+    \item Mỗi máy trạm (workstation):
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 500 MB/ngày.
+        \item Lưu lượng tải lên (upload): 100 MB/ngày.
+    \end{itemize}
+    
+    \item Thiết bị của khách hàng kết nối với WiFi:
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 500 MB/ngày.
+    \end{itemize}
+\end{itemize}
+
+Ngoài ra, hệ thống được dự kiến có mức tăng trưởng khoảng 20\% trong vòng 5 năm. Do đó, thiết kế mạng cần tính đến khả năng mở rộng băng thông, năng lực xử lý của các thiết bị mạng và khả năng đáp ứng lưu lượng gia tăng trong tương lai.
 
 \subsection{Xác định vùng có tải mạng cao}
+Dựa trên quy mô triển khai và các ứng dụng được sử dụng trong bệnh viện, một số khu vực có khả năng phát sinh lưu lượng mạng lớn cần được xem xét:
 
-
-
-
-
-\subsubsection{Trụ sở chính}
-Quy mô cơ sở:
 \begin{itemize}
-    \item 2 tòa nhà A và B, mỗi tòa 5 tầng, mỗi tầng 10 phòng.
-    \item 600 máy trạm (workstation).
-    \item 10 máy chủ (server).
-    \item Tối thiểu 12 thiết bị mạng cốt lõi, chưa bao gồm các thiết bị bảo mật đặc thù.
+    \item \textbf{Trung tâm dữ liệu (data center)}: Nơi tập trung các máy chủ và dịch vụ dùng chung của bệnh viện (HIS, RIS-PACS, LIS và cơ sở dữ liệu). Lưu lượng truy cập và trao đổi dữ liệu giữa máy trạm với máy chủ có thể phát sinh tải mạng đáng kể.
+    \item \textbf{Khu vực chẩn đoán hình ảnh}: Các hệ thống RIS-PACS phục vụ việc lưu trữ, truy xuất và trao đổi hình ảnh y tế. Những dữ liệu này có kích thước lớn, do đó cần xem xét nhu cầu băng thông và tốc độ kết nối tại khu vực này.
+    \item \textbf{Các khoa/phòng ban có mật độ mát trạm cao}: Nhiều máy trạm hoạt động đồng thời và truy cập các hệ thống bệnh viện có thể làm gia tăng lưu lượng mạng cục bộ cũng như lưu lượng đến trung tâm dữ liệu.
+    \item \textbf{Kết nối WiFi từ khách hàng}: Số lượng thiết bị cá nhân kết nối đồng thời có thể tạo ra lưu lượng Internet đáng kể. Cần xem xét mật độ thiết bị và khả năng đáp ứng của hệ thống WiFi.
 \end{itemize}
 
-Trung tâm dữ liệu (data center), phòng IT, và phòng cáp trung tâm (cabling central local) được bố trí tách biệt, cách khu vực tòa A và B khoảng 50m.
-
-Kết nối không dây phải phủ sóng cho toàn bộ khu vực trụ sở.
-
-Sử dụng các công nghệ mạng được yêu cầu cho cơ sở hạ tầng mạng:
-\begin{itemize}
-    \item Kết nối có dây và không dây.
-    \item Cáp sợi quang (GPON).
-    \item Giga EthernetL các tốc độ 1GbE, 10GbE hoặc 40GbE.
-    \item VLAN dùng phân chia mạng theo từng Khoa/Phòng ban.
-\end{itemize}
-
-Kết nối WAN và Internet:
-\begin{itemize}
-    \item Trụ sở chính kết nối với chi nhánh ĐBP và BHTQ bằng 2 kênh truyền riêng (leased line).
-    \item Có thể dùng SD-WAN hoặc MPLS để triển khai kết nối WAN.
-    \item Trụ sở chính dùng kết nối Dual DSL (2xDSL) đến Internet, có cơ chế cân bằng tải (load balancing). Tất cả lưu lượng truy cập vào Internet đều đi qua mạng con trụ sở chính.
-    \item Đề xuất cấu hình VPN kết nối site-to-site và kết nối từ xa (remote access) vào mạng LAN của bệnh viện.
-    \item Đề xuất hệ thống camera giám sát cho công ty.
-\end{itemize}
-
-Các hệ thống và yêu cầu phi chức năng:
-\begin{itemize}
-    \item Các phần mềm hệ thống bệnh viện: HIS, RIS - PACS, LIS, CRM, etc.
-    \item Các ứng dụng đa phương tiện, client-server, văn phòng và cơ sở dữ liệu.
-    \item Khả năng mở rộng hệ thống mạng.
-    \item Bảo mật cao: tường lửa, IPS/IDS, phishing detection.
-    \item Tính sẳn sàng cao (HA), khả năng phục hồi khi xảy ra sự cố và dễ nâng cấp.
-\end{itemize}
-
-\subsubsection{Chi nhánh khác}
-Quy mô cơ sở:
-\begin{itemize}
-    \item 260 máy trạm (workstation).
-    \item 2 máy chủ (server).
-    \item Tối thiểu 5 thiết bị mạng.
-\end{itemize}
-Tòa nhà chi nhánh có 2 tầng, tầng 1 gồm 1 phòng IT và 1 phòng cáp trung tâm.
-
-
-
-
-
-
-
-
-
-
-\subsection{Checklist khảo sát}
-
-\subsection{Vùng tải cao và load balancing}
-
-\subsection{Cấu trúc mạng}
-
-\subsection{Phân vùng bảo mật (server farm, DMZ, firewall)}
-
-\subsection{Thiết kế Wi-Fi}
+Các khu vực trên sẽ được ưu tiên xem xét trong quá trình khảo sát, phân bố băng thông và lựa chọn thiết bị mạng nhằm đảm bảo hiệu năng hoạt động của toàn hệ thống.
