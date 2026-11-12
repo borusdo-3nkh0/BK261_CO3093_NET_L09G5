@@ -126,7 +126,7 @@ def test_job_close_kills_descendant_after_parent_exits(tmp_path):
 
 
 def test_fixture_closes_its_http_listener(tmp_path):
-    from file_fixture import fixture
+    from tests.file_fixture import fixture
 
     with fixture("ui", tmp_path) as config:
         with urlopen(f"http://127.0.0.1:{config['http']}/", timeout=2) as response:

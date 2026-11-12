@@ -442,10 +442,11 @@ class FileClient:
 
     def _discard_incoming(self, transfer_id, reason, *, notify):
         with self._lock:
-            incoming = self._incoming.pop(transfer_id, None)
+            incoming = self._incoming.get(transfer_id)
+            if incoming is not None:
+                incoming.abort()
+                self._incoming.pop(transfer_id, None)
             offered = self._offers.pop(transfer_id, None)
-        if incoming is not None:
-            incoming.abort()
         if incoming is not None or offered is not None:
             self._remember(transfer_id, Kind.ERROR, reason)
             self._emit(
