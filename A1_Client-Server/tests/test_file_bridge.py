@@ -118,6 +118,7 @@ def test_exclusive_correlation_with_identical_metadata_and_delayed_events(servic
     assert len(files.client.calls) == 1
     files.client.release.set()
     wait(lambda: files.records[second["transferId"]]["data"]["status"] == "completed")
+    wait(lambda: files.active is None)
     for meta, call in zip((first, second), files.client.calls, strict=True):
         assert files.wire_ids[call[0]] is files.records[meta["transferId"]]
         assert call[0] != meta["transferId"]

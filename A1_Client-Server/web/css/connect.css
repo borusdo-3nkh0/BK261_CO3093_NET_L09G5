@@ -47,7 +47,7 @@ button, textarea, summary { -webkit-tap-highlight-color: transparent; }
 #disconnect { background: transparent; color: #c2cee3; border-color: #3a4b68; font-size: 10px; padding: 6px; min-height: 30px; }
 #disconnect:disabled { opacity: .5; }
 .chat-panel { display: flex; flex-direction: column; height: 100%; margin: 0; padding: 0; max-width: none; min-height: 0; min-width: 0; overflow: hidden; background: #f8fafc; border-radius: 0; }
-.chat-heading { height: 64px; min-height: 64px; padding: 8px 28px; background: white; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.chat-heading { height: auto; min-height: 64px; flex-shrink: 0; padding: 8px 28px; background: white; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
 .chat-heading .avatar { width: 38px; height: 38px; border-radius: 12px; color: #3762a5; background: #eaf1ff; }
 .chat-heading-text { flex: 1; min-width: 0; } .chat-heading h1 { font-size: 20px; font-weight: 700; margin: 0; line-height: 1.3; overflow-wrap: anywhere; letter-spacing: -.02em; }
 #chat-kind { display: none; } #recipient-state { font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
@@ -111,7 +111,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   .workspace[data-sidebar-open="true"] .sidebar { transform: none; visibility: visible; }
   .sidebar-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 29; border: 0; border-radius: 0; background: #0d1b3066; }
   #sidebar-toggle { display: grid; }
-  .chat-heading { height: 64px; min-height: 64px; padding: 8px 14px; gap: 9px; }
+  .chat-heading { height: auto; min-height: 64px; padding: 8px 14px; gap: 9px; }
   .chat-heading h1 { font-size: 18px; } .chat-heading .avatar { width: 32px; height: 32px; flex-shrink: 0; }
   #recipient-state { font-size: 11px; }
   .messages { padding: 18px 16px 12px; } .message { max-width: 91%; margin-bottom: 16px; }

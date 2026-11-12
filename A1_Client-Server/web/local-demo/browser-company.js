@@ -17,9 +17,12 @@ async function runCompanyChecks() {
   const headersFit = companyConversations.every(conversation => {
     choose(conversation.conversationId);
     const heading = document.querySelector(".chat-heading").getBoundingClientRect();
-    return $("chat-title").getBoundingClientRect().bottom <= heading.bottom && $("recipient-state").getBoundingClientRect().bottom <= heading.bottom;
+    return [$("chat-title"), $("recipient-state")].every(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.top >= heading.top && rect.bottom <= heading.bottom;
+    });
   });
-  assert(headersFit, "M13 long names and offline descriptions fit the fixed chat header");
+  assert(headersFit, "M13 long names and offline descriptions fit entirely inside the chat header");
   for (const conversation of [{ conversationId: GLOBAL }, ...companyConversations]) {
     const history = companyMessages.filter(message => message.conversationId === conversation.conversationId);
     const latest = history.reduce((last, message) => !last || Date.parse(message.createdAt) >= Date.parse(last.createdAt) ? message : last, null);

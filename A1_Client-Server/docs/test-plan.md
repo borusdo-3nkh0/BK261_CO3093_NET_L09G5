@@ -4,7 +4,7 @@ Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Từ lượ
 
 ## CLI, runner và CI P3 — 2026-11-12
 
-Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.FaultRelay, docs/validation.md và workflow p1.yml. P3 tận dụng CLI demo/check, process riêng và SHA ghim, không sao chép thuật toán mạng hoặc sửa source P1/P2. Production bridge/UI/security không đổi trong lượt này.
+Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.FaultRelay, docs/validation.md và workflow p1.yml. P3 tận dụng CLI demo/check, process riêng và SHA ghim, không sao chép thuật toán mạng hoặc sửa source P1/P2. Bridge/adapter/security giữ nguyên; CSS header được sửa sau khi CI phát hiện tràn tên dài trên Linux như mô tả bên dưới.
 
 | Kiểm tra thực chạy trên Windows/Python 3.14.4 | Kết quả |
 | --- | --- |
@@ -24,7 +24,9 @@ Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.Fau
 
 Lượt check-41302a50adde4bdd97f51be3627d6bc7 có P2-browser FAIL: chờ nhãn Đã gửi có thể khớp tin cũ, rồi nối nháp vào composer chưa được giải phóng. Đã sửa **test** chờ đúng message-body của tin vừa gửi và input rỗng; giữ nguyên assertion nháp và production. Lượt p2 riêng check-fa8a635ffab747b8bb3b51299f102628 đạt 77,38s; lượt all sau đó đạt. Không che thất bại hoặc sửa logic nghiệp vụ để pass.
 
-CI Windows/Ubuntu Python 3.14 được cấu hình trong p3.yml, chỉ đánh dấu đã chạy khi có URL/run và conclusion thực tế. WSL AlmaLinux trên máy chưa có Python 3.14/Node/Chrome, không dùng để khẳng định Linux đạt. LAN, file lớn, FILE_SESSION P2 thật và Security v2 chưa nghiệm thu. Xem checklist [testing.md](testing.md) và phần báo cáo [p3-report.md](p3-report.md).
+CI đầu [43175928158](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43175928158), commit 1095c0f: Windows PASS; Ubuntu FAIL. Artifact Ubuntu cho thấy test correlation kiểm quota trước khi worker dọn xong và font Linux làm tên/mô tả offline tràn header 64px ở 390×844. Sửa test chờ active=None trước assertion cleanup, giữ toàn bộ assertion quota/file; sửa CSS dùng min-height 64px và height auto để hiện đủ nội dung. Test demo kiểm cả top/bottom trong header, không giảm coverage hoặc ẩn trạng thái. Kết quả lỗi và ảnh gốc được giữ trong artifact CI, bản tải local ở runtime/p3/ci-43175928158/.
+
+CI tiếp theo chỉ đánh dấu đạt khi có run/conclusion thực tế. WSL AlmaLinux trên máy chưa có Python 3.14/Node/Chrome, không dùng để khẳng định Linux đạt. LAN, file lớn, FILE_SESSION P2 thật và Security v2 chưa nghiệm thu. Xem checklist [testing.md](testing.md) và phần báo cáo [p3-report.md](p3-report.md).
 
 ## Bàn giao vào MMT-P3/A1_Client-Server — 2026-11-12
 

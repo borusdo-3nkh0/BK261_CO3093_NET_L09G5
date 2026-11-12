@@ -94,6 +94,7 @@ def test_real_p1_sequential_same_metadata_keeps_ids_and_hashes(p1_services):
         )
         received.append(wire)
     assert len(set(received)) == 2
+    wait(lambda: a.active is None)
     assert a.used_bytes == 0 and not list(a.root.glob("upload-*"))
     assert len({r["path"] for r in b.records.values()}) == 2
 
@@ -172,6 +173,7 @@ def test_real_p1_hash_failure_is_not_published_and_next_empty_file_works(p1_serv
         with b.download(wire):
             pass
     assert not any(path.is_file() for path in b.downloads.rglob("*"))
+    wait(lambda: b.used_bytes == 0)
     assert a.used_bytes == b.used_bytes == 0
     retry = metadata()
     a.upload(retry, 0, io.BytesIO())
