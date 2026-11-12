@@ -15,13 +15,15 @@ from p1.relay import FileRelay
 from shared.protocol import (
     HEADER,
     MAX_DATAGRAM,
-    MessageType as Kind,
     Packet,
     SessionTicket,
     decode_packet,
     encode_json,
     encode_packet,
     peek_session_id,
+)
+from shared.protocol import (
+    MessageType as Kind,
 )
 
 

@@ -1,4 +1,3 @@
-
 import socket
 import threading
 import time
@@ -8,7 +7,6 @@ from server.socket_server import SocketServer
 
 
 class TestTCPResilienceIntegration(unittest.TestCase):
-
     def setUp(self):
         self.server = SocketServer(
             host="127.0.0.1",
@@ -70,11 +68,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
 
         self.assertEqual(client.recv(1), b"")
 
-        self.assertTrue(
-            self.wait_for(
-                lambda: self.server.client_semaphore._value == 1
-            )
-        )
+        self.assertTrue(self.wait_for(lambda: self.server.client_semaphore._value == 1))
 
     def test_partial_handshake_timeout(self):
         client = self.connect_client()
@@ -104,11 +98,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
 
         self.assertEqual(first.recv(1), b"")
 
-        self.assertTrue(
-            self.wait_for(
-                lambda: self.server.client_semaphore._value == 1
-            )
-        )
+        self.assertTrue(self.wait_for(lambda: self.server.client_semaphore._value == 1))
 
         second = self.connect_client()
         second.sendall(b"HELLO\n")
@@ -124,11 +114,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
         first.shutdown(socket.SHUT_RDWR)
         first.close()
 
-        self.assertTrue(
-            self.wait_for(
-                lambda: self.server.client_semaphore._value == 1
-            )
-        )
+        self.assertTrue(self.wait_for(lambda: self.server.client_semaphore._value == 1))
 
         second = self.connect_client()
         second.sendall(b"HELLO\n")
@@ -151,17 +137,13 @@ class TestTCPResilienceIntegration(unittest.TestCase):
                 "username": username,
                 "password": password,
             }
-            client.sendall(
-                (json.dumps(request) + "\n").encode("utf-8")
-            )
+            client.sendall((json.dumps(request) + "\n").encode("utf-8"))
 
             response = bytearray()
             while not response.endswith(b"\n"):
                 chunk = client.recv(1)
                 if not chunk:
-                    raise AssertionError(
-                        "Connection closed before response"
-                    )
+                    raise AssertionError("Connection closed before response")
                 response.extend(chunk)
 
             return json.loads(response.decode("utf-8"))
@@ -178,27 +160,20 @@ class TestTCPResilienceIntegration(unittest.TestCase):
             "LOGIN_SUCCESS",
         )
 
-        self.assertIsNotNone(
-            self.server.session_manager.get_session(username)
-        )
+        self.assertIsNotNone(self.server.session_manager.get_session(username))
 
         # Simulate an unexpected client disconnect.
         first.close()
 
         self.assertTrue(
             self.wait_for(
-                lambda: (
-                    self.server.session_manager.get_session(username)
-                    is None
-                )
+                lambda: self.server.session_manager.get_session(username) is None
             ),
             "Session was not removed after disconnect",
         )
 
         self.assertTrue(
-            self.wait_for(
-                lambda: self.server.client_semaphore._value == 1
-            ),
+            self.wait_for(lambda: self.server.client_semaphore._value == 1),
             "Connection slot was not released",
         )
 
@@ -228,8 +203,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
         self.assertTrue(
             self.wait_for(
                 lambda: all(
-                    not thread.is_alive()
-                    for thread in self.server.client_threads
+                    not thread.is_alive() for thread in self.server.client_threads
                 )
             ),
             "Client threads are still running",
@@ -260,9 +234,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
                 "password": password,
             }
 
-            client.sendall(
-                (json.dumps(request) + "\n").encode("utf-8")
-            )
+            client.sendall((json.dumps(request) + "\n").encode("utf-8"))
 
             response = bytearray()
 
@@ -290,13 +262,9 @@ class TestTCPResilienceIntegration(unittest.TestCase):
         )
 
         # STEP 2: Verify session and router registration.
-        self.assertIsNotNone(
-            self.server.session_manager.get_session(username)
-        )
+        self.assertIsNotNone(self.server.session_manager.get_session(username))
 
-        self.assertIsNotNone(
-            self.server.message_router.get_client(username)
-        )
+        self.assertIsNotNone(self.server.message_router.get_client(username))
 
         self.assertIn(
             username,
@@ -310,10 +278,8 @@ class TestTCPResilienceIntegration(unittest.TestCase):
         self.assertTrue(
             self.wait_for(
                 lambda: (
-                    self.server.session_manager.get_session(username)
-                    is None
-                    and self.server.message_router.get_client(username)
-                    is None
+                    self.server.session_manager.get_session(username) is None
+                    and self.server.message_router.get_client(username) is None
                 )
             ),
             "Session or MessageRouter was not cleaned up",
@@ -326,11 +292,10 @@ class TestTCPResilienceIntegration(unittest.TestCase):
 
         # STEP 5: Verify connection slot released.
         self.assertTrue(
-            self.wait_for(
-                lambda: self.server.client_semaphore._value == 1
-            ),
+            self.wait_for(lambda: self.server.client_semaphore._value == 1),
             "Connection slot was not released",
         )
+
     def test_server_accept_thread_stops(self):
         self.server.stop()
 
@@ -345,6 +310,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
             self.server.server_socket,
             "Listening socket reference was not cleared",
         )
+
 
 if __name__ == "__main__":
     unittest.main()

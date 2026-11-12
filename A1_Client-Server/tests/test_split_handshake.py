@@ -1,4 +1,3 @@
-
 import socket
 import time
 
@@ -10,11 +9,7 @@ def main():
     print("[TEST] Testing split handshake...")
 
     try:
-        with socket.socket(
-            socket.AF_INET,
-            socket.SOCK_STREAM
-        ) as client_socket:
-
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.settimeout(5)
             client_socket.connect((host, port))
 
@@ -33,9 +28,7 @@ def main():
                 chunk = client_socket.recv(1024)
 
                 if not chunk:
-                    raise ConnectionError(
-                        "Server disconnected during handshake"
-                    )
+                    raise ConnectionError("Server disconnected during handshake")
 
                 response += chunk
 

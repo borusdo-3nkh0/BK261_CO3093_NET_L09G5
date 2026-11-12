@@ -1,7 +1,5 @@
-
 import json
 import socket
-
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -23,11 +21,7 @@ def receive_line(sock):
 
 
 def send_auth_request(sock, action, username, password):
-    request = {
-        "action": action,
-        "username": username,
-        "password": password
-    }
+    request = {"action": action, "username": username, "password": password}
 
     message = json.dumps(request).encode("utf-8") + b"\n"
     sock.sendall(message)
@@ -55,21 +49,15 @@ def main():
             return
 
         # Step 2: Register
-        register = send_auth_request(
-            client, "REGISTER", "alice", "demo123"
-        )
+        register = send_auth_request(client, "REGISTER", "alice", "demo123")
         print("REGISTER:", register)
 
         # Step 3: Login with correct password
-        login_success = send_auth_request(
-            client, "LOGIN", "alice", "demo123"
-        )
+        login_success = send_auth_request(client, "LOGIN", "alice", "demo123")
         print("LOGIN correct password:", login_success)
 
         # Step 4: Login with wrong password
-        login_failed = send_auth_request(
-            client, "LOGIN", "alice", "wrong"
-        )
+        login_failed = send_auth_request(client, "LOGIN", "alice", "wrong")
         print("LOGIN wrong password:", login_failed)
 
         # Step 5: Verify results

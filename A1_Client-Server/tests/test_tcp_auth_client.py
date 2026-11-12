@@ -1,7 +1,5 @@
-
 import json
 import socket
-
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -37,11 +35,7 @@ def main():
             return
 
         # Step 2: Register a test account
-        request = {
-            "action": "REGISTER",
-            "username": "alice",
-            "password": "demo123"
-        }
+        request = {"action": "REGISTER", "username": "alice", "password": "demo123"}
 
         message = json.dumps(request).encode("utf-8") + b"\n"
         client.sendall(message)

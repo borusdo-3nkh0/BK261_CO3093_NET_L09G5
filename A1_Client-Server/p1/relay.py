@@ -10,15 +10,17 @@ import uuid
 from dataclasses import dataclass, replace
 
 from shared.protocol import (
-    FileOffer,
     MAX_DATAGRAM,
-    MessageType as Kind,
+    FileOffer,
     Packet,
     ProtocolError,
     SessionTicket,
     decode_packet,
     encode_packet,
     peek_session_id,
+)
+from shared.protocol import (
+    MessageType as Kind,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,7 +171,7 @@ class FileRelay:
                 self._deliver(outputs)
             except socket.timeout:
                 pass
-            except (ProtocolError, UnicodeError):
+            except ProtocolError, UnicodeError:
                 # Invalid/unauthenticated datagrams get no response or disk allocation.
                 pass
             except OSError:

@@ -1,0 +1,73 @@
+<a class="skip-link" href="#chat-title">Đến cuộc trò chuyện</a>
+<div class="workspace" data-sidebar-open="false">
+  <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="Đóng danh sách cuộc trò chuyện" hidden></button>
+  <aside id="sidebar" class="sidebar" aria-label="Cuộc trò chuyện và người dùng" tabindex="-1">
+    <header class="topbar">
+      <div class="brand"><span class="brand-icon" aria-hidden="true">C</span><strong>Connect</strong></div>
+      <span id="mode-label" class="mode-badge" hidden></span>
+    </header>
+    <button id="new-chat" class="new-chat" type="button" aria-label="Tìm người để chat" title="Tìm người để chat" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
+    <details id="conversation-list" open>
+      <summary>Cuộc trò chuyện <span aria-hidden="true">⌄</span></summary>
+      <div class="sidebar-content">
+        <nav id="conversations" aria-label="Chọn cuộc trò chuyện"></nav>
+        <section class="members" aria-label="Người đang hoạt động">
+          <div class="sidebar-heading"><h2>Người đang hoạt động</h2><span class="online-total"><span id="online-count">0</span></span></div>
+          <ul id="users" class="user-list"></ul>
+          <p id="presence-help" class="hint"></p>
+        </section>
+      </div>
+    </details>
+    <div class="connection-bar">
+      <span class="self-avatar avatar" aria-hidden="true">C</span>
+      <div class="identity"><strong id="self-name">Chưa đăng nhập</strong><span id="connection-state" role="status">Chưa kết nối</span></div>
+      <button id="disconnect" class="secondary" disabled>Ngắt kết nối</button>
+    </div>
+  </aside>
+  <main class="chat-panel" aria-labelledby="chat-title">
+    <header class="chat-heading">
+      <button id="sidebar-toggle" class="icon-button" aria-label="Mở danh sách cuộc trò chuyện" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <span id="chat-avatar" class="avatar" aria-hidden="true">#</span>
+      <div class="chat-heading-text"><p id="chat-kind" class="eyebrow">KÊNH CHUNG</p><h1 id="chat-title" tabindex="-1">Kênh chung</h1><p id="recipient-state" class="hint">Trò chuyện với mọi người đang kết nối</p></div>
+    </header>
+    <div class="history">
+      <ol id="messages" class="messages" aria-label="Lịch sử tin nhắn" tabindex="0"></ol>
+      <div id="empty-messages" class="empty">
+        <svg viewBox="0 0 80 80" aria-hidden="true"><rect x="12" y="15" width="56" height="43" rx="14"/><path d="m26 58-4 12 20-12M27 32h26M27 42h16"/></svg>
+        <strong>Bắt đầu cuộc trò chuyện</strong><p>Chưa có tin nhắn trong cuộc chat này.</p>
+      </div>
+      <button id="new-messages" class="secondary new-messages" hidden>Có tin mới · Xem cuối lịch sử</button>
+    </div>
+    <section class="file-section" aria-labelledby="file-heading" hidden>
+      <div class="section-heading"><h2 id="file-heading"><button id="toggle-transfers" type="button" aria-expanded="true" aria-controls="transfers"><svg class="file-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>File chia sẻ</button></h2><span id="transfer-summary" class="hint" role="status" hidden></span><p id="file-help" class="hint">Chọn người nhận để chia sẻ file.</p></div>
+      <ul id="transfers" class="transfers" aria-label="Tiến trình file của cuộc chat"></ul>
+      <p id="empty-transfers" class="hint">Chưa có file trong cuộc chat này.</p>
+    </section>
+    <div class="activity"><p id="notice" role="status">Kết nối để bắt đầu trò chuyện.</p><p id="error" role="alert" class="error" hidden></p></div>
+    <form id="message-form" class="composer">
+      <label for="message-input" class="sr-only">Tin nhắn</label>
+      <div class="compose-row">
+        <div id="file-controls">
+          <button id="attach-file" class="icon-button" type="button" aria-label="Đính kèm file" title="Đính kèm file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8M7 15l8-8"/></svg></button>
+          <input id="file-input" type="file" aria-label="Chọn file đính kèm" hidden>
+        </div>
+        <textarea id="message-input" rows="1" maxlength="4000" placeholder="Viết tin nhắn…" aria-describedby="send-help" disabled></textarea>
+        <button id="send" type="submit" disabled><span class="send-label">Gửi tin nhắn</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 11 16-7-7 16-2-7-7-2ZM11 13l9-9"/></svg></button>
+      </div>
+      <div class="composer-footer"><span id="send-help" class="hint">Chưa kết nối.</span><span class="hint">Enter để xuống dòng</span></div>
+    </form>
+    <form id="attachment-form" class="attachment-tray">
+      <p id="file-selection" class="hint file-selection" role="status">Chưa chọn file.</p>
+      <button id="send-file" type="submit" class="secondary" disabled>Gửi file</button>
+    </form>
+  </main>
+</div>
+<dialog id="user-picker" aria-labelledby="user-picker-title" aria-describedby="user-picker-help">
+  <div class="picker-heading"><div><h2 id="user-picker-title">Chat mới</h2><p id="user-picker-help" class="hint">Chọn người bạn muốn trò chuyện.</p></div><button id="close-user-picker" class="icon-button" type="button" aria-label="Đóng bộ chọn người dùng">×</button></div>
+  <label class="user-search" for="user-search">Tìm theo tên<input id="user-search" type="search" placeholder="Nhập tên người dùng" autocomplete="off" autofocus></label>
+  <ul id="known-users" aria-label="Người dùng đã biết"></ul>
+  <p id="empty-users" class="hint" role="status">Chưa có người dùng khác. Danh sách sẽ cập nhật khi có dữ liệu.</p>
+</dialog>
+<section id="demo-tools" class="demo-tools" aria-label="Điều khiển mô phỏng" hidden>
+  <div id="connection-controls"></div><div id="extra-controls"></div>
+</section>

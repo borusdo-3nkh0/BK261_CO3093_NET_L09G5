@@ -1,4 +1,3 @@
-
 import json
 import socket
 import threading
@@ -9,7 +8,6 @@ from server.socket_server import SocketServer
 
 
 class TestListOnlineIntegration(unittest.TestCase):
-
     def setUp(self):
         self.server = SocketServer(
             host="127.0.0.1",
@@ -71,9 +69,7 @@ class TestListOnlineIntegration(unittest.TestCase):
 
         # STEP 4: Verify that no client worker remains alive.
         alive_threads = [
-            thread.name
-            for thread in self.server.client_threads
-            if thread.is_alive()
+            thread.name for thread in self.server.client_threads if thread.is_alive()
         ]
 
         self.assertEqual(
@@ -123,26 +119,20 @@ class TestListOnlineIntegration(unittest.TestCase):
             chunk = client.recv(1)
 
             if not chunk:
-                raise AssertionError(
-                    "Connection closed unexpectedly"
-                )
+                raise AssertionError("Connection closed unexpectedly")
 
             data.extend(chunk)
 
         return bytes(data)
 
     def send_request(self, client, request):
-        payload = (
-            json.dumps(request) + "\n"
-        ).encode("utf-8")
+        payload = (json.dumps(request) + "\n").encode("utf-8")
 
         client.sendall(payload)
 
         response = self.read_line(client)
 
-        return json.loads(
-            response.decode("utf-8")
-        )
+        return json.loads(response.decode("utf-8"))
 
     def register_and_login(self, client, username):
         for action, expected in (
@@ -255,12 +245,7 @@ class TestListOnlineIntegration(unittest.TestCase):
 
         # Wait for MessageRouter cleanup.
         self.assertTrue(
-            self.wait_for(
-                lambda: (
-                    self.server.message_router.get_client("bob")
-                    is None
-                )
-            ),
+            self.wait_for(lambda: self.server.message_router.get_client("bob") is None),
             "Bob was not removed from MessageRouter",
         )
 

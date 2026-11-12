@@ -1,86 +1,78 @@
+
 # A1 - Distributed and Streaming-Based Client-Server Collaboration Application
 
-P1 covers **protocol design and reliable file transfer over UDP** (assignment
-steps 1 and 6). This branch starts directly from `main`; P2's server changes are
-not included. Python **3.9 or newer**, no third-party dependencies.
+## Project Overview
 
-Read the [protocol specification](docs/protocol.md) for packet layouts, TCP
-actions/statuses, authentication, TCP/UDP coordination, state and sequence
-diagrams, retry rules, and assignment boundaries.
-See the [integration guide](docs/integration.md) for P2 session hooks and P3 UI
-events. P1 uses raw UDP sockets; it does not use HTTP frameworks, WebSockets, or
-high-level networking libraries.
+This project combines three components:
 
-## Quick demonstration
+- **P1 – Protocol and UDP File Transfer:** Reliable file transfer over UDP, including packet framing, acknowledgements, retries and file-transfer sessions.
+- **P2 – TCP Server:** Authentication, session management, messaging, online-user management and coordination with the P1 UDP relay.
+- **P3 – Web UI, Bridge and Security:** HTML/CSS/JavaScript interface, localhost HTTP-to-TCP bridge, integration with P1 file transfer, standalone AES-GCM module and automated tests.
 
-From the repository root:
+## Environment
 
-```sh
-cd A1_Client-Server
-python3 --version
-python3 -m p1 demo
+- Python 3.9+ for the P1 implementation; other components may have additional requirements.
+- Use the project virtual environment (`.venv`) for development and testing.
+- Some P3 browser tests require additional tooling.
+
+## P1 – Protocol and UDP File Transfer
+
+P1 uses raw UDP sockets without high-level networking frameworks.
+
+See:
+
+- [Protocol specification](docs/protocol.md)
+- [Integration guide](docs/integration.md)
+
+## P2 – TCP Server
+
+P2 provides TCP-based authentication, messaging and session management.
+
+The integrated P1–P2 version also provides:
+
+- `PING` / `PONG`
+- `FILE_SESSION`
+- `FILE_SESSION_READY`
+- UDP relay lifecycle and file-session ticket management
+
+## P3 – Connect Web UI
+
+P3 provides the browser interface and local HTTP bridge.
+
+Run the P3 demo:
+
+```powershell
+python -B p3.py demo
 ```
 
-This starts a real localhost UDP relay and two clients, then sends an empty
-file, Unicode text, and a 512 KiB binary file with a partial final chunk. It
-also sends a file in the reverse direction. Every result is checked against
-the original bytes and SHA-256. The command prints the retained output directory
-and shuts down its own sockets and threads on exit.
+Run P3 test suites:
 
-## Separate terminal demonstration
-
-Run all commands from `A1_Client-Server`. First provision private local demo
-tickets once (the directory must not already exist):
-
-```sh
-python3 -m p1 init-demo --directory .local/p1-demo
+```powershell
+python -B p3.py check --suite independent
+python -B p3.py check --suite ui
+python -B p3.py check --suite p1
+python -B p3.py check --suite p2
+python -B p3.py check --suite all
 ```
 
-Terminal 1, relay:
+The P3 test runner records results under:
 
-```sh
-python3 -m p1 serve --sessions .local/p1-demo/server.json --port 5001
-```
+`runtime/p3/checks/<run-ID>/`
 
-Terminal 2, Bob receiving:
+Selected integration suites may require external dependencies or specific P1/P2 revisions.
 
-```sh
-python3 -m p1 receive --ticket .local/p1-demo/bob.json --download-dir downloads/bob
-```
+See:
 
-Terminal 3, Alice sending:
+- [P3 testing guide](docs/testing.md)
+- [P3 report](docs/p3-report.md)
+- [P3 test plan](docs/test-plan.md)
 
-```sh
-python3 -m p1 send --ticket .local/p1-demo/alice.json --recipient bob --file README.md
-```
+## Integration Status
 
-Bob must be ready before Alice sends. Alice reports `verified` only after Bob
-reassembles the file and validates its size and hash. Ctrl+C stops the relay or
-receiver and cleans pending partial files. Demo credentials stay under ignored
-`.local/`; each client receives only its own ticket. These locally provisioned
-tickets are a standalone test harness, not the team's final login system.
-The send command can be repeated with the same demo ticket; each connection
-proves possession of its key with a fresh relay challenge.
+P1–P2 integration previously passed 171 tests.
 
-For two LAN machines, bind the relay with `--host 0.0.0.0`, give clients its
-actual LAN IP using `--host`, allow the configured UDP port through the local
-firewall, and provision each private ticket to its owner securely. Localhost
-verification does not establish physical LAN, VPN, or GUI acceptance.
+P3 was developed against earlier P1/P2 revisions. Full compatibility with the current integrated server, including the real `FILE_SESSION` and UDP ticket workflow, must be verified.
 
-## Automated checks
+The standalone AES-GCM module does not imply that network traffic is currently encrypted.
 
-```sh
-python3 -m unittest discover -s tests -v
-python3 -m compileall -q shared p1 tests
-```
-
-Tests use real localhost UDP sockets, deterministic loss/duplication/reordering
-in a relay fixture, and temporary files. They check integrity, retransmissions,
-control-packet loss, concurrency, rejection, cancellation, timeouts, path safety,
-and resource limits. See [P1 validation](docs/validation.md) for recorded results.
-
-The [P1 report contribution](docs/p1-report.md) explains implementation choices
-and challenges for inclusion in the team's final technical PDF. Payload
-encryption, final UI, P2 integration, and named BBR/CUBIC algorithms are not
-claimed by P1.
-
+See [Integration Guide](docs/integration.md) for further details.

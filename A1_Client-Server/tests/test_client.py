@@ -1,4 +1,3 @@
-
 import socket
 
 
@@ -9,11 +8,7 @@ def main():
     print("[CLIENT] Starting TCP client...")
 
     try:
-        with socket.socket(
-            socket.AF_INET,
-            socket.SOCK_STREAM
-        ) as client_socket:
-
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.settimeout(5)
 
             print(f"[CLIENT] Connecting to {host}:{port}...")
@@ -32,16 +27,12 @@ def main():
                 chunk = client_socket.recv(1024)
 
                 if not chunk:
-                    raise ConnectionError(
-                        "Server disconnected during handshake"
-                    )
+                    raise ConnectionError("Server disconnected during handshake")
 
                 response += chunk
 
                 if len(response) > 1024:
-                    raise ValueError(
-                        "Handshake response is too large"
-                    )
+                    raise ValueError("Handshake response is too large")
 
             if response == b"WELCOME\n":
                 print("[CLIENT] Received: WELCOME")

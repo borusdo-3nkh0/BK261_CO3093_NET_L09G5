@@ -5,7 +5,6 @@ from server.auth_manager import AuthManager
 
 
 class TestAuthManager(unittest.TestCase):
-
     def setUp(self):
         """Create a fresh AuthManager for each test."""
         self.auth = AuthManager()
@@ -21,14 +20,10 @@ class TestAuthManager(unittest.TestCase):
         self.assertFalse(result)
 
     def test_register_empty_username(self):
-        self.assertFalse(
-            self.auth.register("", "demo123")
-        )
+        self.assertFalse(self.auth.register("", "demo123"))
 
     def test_register_empty_password(self):
-        self.assertFalse(
-            self.auth.register("alice", "")
-        )
+        self.assertFalse(self.auth.register("alice", ""))
 
     def test_authenticate_success(self):
         self.auth.register("alice", "demo123")
@@ -57,10 +52,7 @@ class TestAuthManager(unittest.TestCase):
 
         stored = self.auth.users["alice"]
 
-        self.assertNotEqual(
-            stored["password_hash"],
-            b"demo123"
-        )
+        self.assertNotEqual(stored["password_hash"], b"demo123")
         self.assertEqual(len(stored["salt"]), 16)
         self.assertEqual(len(stored["password_hash"]), 32)
 
@@ -76,18 +68,12 @@ class TestAuthManager(unittest.TestCase):
         def register_user():
             barrier.wait()
 
-            success = self.auth.register(
-                "alice",
-                "password123"
-            )
+            success = self.auth.register("alice", "password123")
 
             with results_lock:
                 results.append(success)
 
-        threads = [
-            threading.Thread(target=register_user)
-            for _ in range(thread_count)
-        ]
+        threads = [threading.Thread(target=register_user) for _ in range(thread_count)]
 
         for thread in threads:
             thread.start()
@@ -95,9 +81,7 @@ class TestAuthManager(unittest.TestCase):
         for thread in threads:
             thread.join(timeout=30)
 
-        self.assertTrue(
-            all(not thread.is_alive() for thread in threads)
-        )
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
 
         self.assertEqual(len(results), thread_count)
         self.assertEqual(results.count(True), 1)
@@ -105,13 +89,7 @@ class TestAuthManager(unittest.TestCase):
 
         self.assertEqual(len(self.auth.users), 1)
 
-        self.assertTrue(
-            self.auth.authenticate(
-                "alice",
-                "password123"
-            )
-        )
-
+        self.assertTrue(self.auth.authenticate("alice", "password123"))
 
 
 if __name__ == "__main__":

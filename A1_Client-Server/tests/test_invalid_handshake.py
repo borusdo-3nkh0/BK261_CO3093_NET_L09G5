@@ -1,4 +1,3 @@
-
 import socket
 
 
@@ -9,11 +8,7 @@ def main():
     print("[TEST] Testing invalid handshake...")
 
     try:
-        with socket.socket(
-            socket.AF_INET,
-            socket.SOCK_STREAM
-        ) as client_socket:
-
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.settimeout(5)
             client_socket.connect((host, port))
 
@@ -28,9 +23,7 @@ def main():
                 chunk = client_socket.recv(1024)
 
                 if not chunk:
-                    raise ConnectionError(
-                        "Server closed connection unexpectedly"
-                    )
+                    raise ConnectionError("Server closed connection unexpectedly")
 
                 response += chunk
 

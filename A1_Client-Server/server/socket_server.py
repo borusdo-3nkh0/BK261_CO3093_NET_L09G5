@@ -1,17 +1,16 @@
-import time
+import json
 import logging
 import socket
 import threading
-import json
+import time
 
+from p1.relay import FileRelay
 from server.auth_manager import AuthManager
-from server.client_handler import ClientHandler
 from server.auth_protocol_adapter import AuthProtocolAdapter
-from server.session_manager import SessionManager
+from server.client_handler import ClientHandler
 from server.message_router import MessageRouter
 from server.request_dispatcher import RequestDispatcher
-from p1.relay import FileRelay
-
+from server.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +59,15 @@ class SocketServer:
     """Multi-client TCP server with authentication and sessions."""
 
     def __init__(
-    self,
-    host="127.0.0.1",
-    port=5000,
-    max_clients=20,
-    handshake_timeout=5.0,
-    idle_timeout=60.0,
-    udp_host="127.0.0.1",
-    udp_port=5001,
-):
+        self,
+        host="127.0.0.1",
+        port=5000,
+        max_clients=20,
+        handshake_timeout=5.0,
+        idle_timeout=60.0,
+        udp_host="127.0.0.1",
+        udp_port=5001,
+    ):
         self.host = host
         self.port = port
         for name, value in (
@@ -84,7 +83,7 @@ class SocketServer:
 
         self.handshake_timeout = float(handshake_timeout)
         self.idle_timeout = float(idle_timeout)
-        
+
         if (
             not isinstance(max_clients, int)
             or isinstance(max_clients, bool)
@@ -93,9 +92,7 @@ class SocketServer:
             raise ValueError("max_clients must be a positive integer")
 
         self.max_clients = max_clients
-        self.client_semaphore = threading.BoundedSemaphore(
-            value=max_clients
-        )
+        self.client_semaphore = threading.BoundedSemaphore(value=max_clients)
         self.server_socket = None
 
         # Authentication components
@@ -127,9 +124,7 @@ class SocketServer:
             request = AuthProtocolAdapter.decode_request(data)
 
             status = self.client_handler.process_auth_request(
-                request["action"],
-                request["username"],
-                request["password"]
+                request["action"], request["username"], request["password"]
             )
 
         except ValueError:
@@ -138,15 +133,11 @@ class SocketServer:
 
         return AuthProtocolAdapter.encode_response(status)
 
-    
     def send_response(self, client_socket, active_username, data):
         """Send a response using the client's shared send lock."""
 
         if active_username is not None:
-            return self.message_router.send_to_client(
-                active_username,
-                data
-            )
+            return self.message_router.send_to_client(active_username, data)
 
         # Before LOGIN, no other thread can route messages
         # to this socket through MessageRouter.
@@ -156,7 +147,6 @@ class SocketServer:
         except OSError:
             return False
 
-
     def handle_client(self, client_socket, client_address):
         """Handle handshake, authentication, and request classification."""
 
@@ -165,19 +155,13 @@ class SocketServer:
 
         try:
             with client_socket:
-                logger.info(
-                    "Client connected: %s",
-                    client_address
-                )
+                logger.info("Client connected: %s", client_address)
 
                 client_socket.settimeout(self.handshake_timeout)
 
                 # STEP 1: HANDSHAKE
                 try:
-                    data = receive_line(
-                        client_socket,
-                        timeout=self.handshake_timeout
-                    )
+                    data = receive_line(client_socket, timeout=self.handshake_timeout)
 
                 except ValueError:
                     logger.warning("Handshake message too large")
@@ -189,9 +173,7 @@ class SocketServer:
                     return
 
                 if data is None:
-                    logger.warning(
-                        "Client disconnected during handshake"
-                    )
+                    logger.warning("Client disconnected during handshake")
                     return
 
                 if data != b"HELLO\n":
@@ -206,27 +188,22 @@ class SocketServer:
                 client_socket.settimeout(self.idle_timeout)
 
                 logger.info(
-                    "Client idle timeout configured: %.1f seconds",
-                    self.idle_timeout
+                    "Client idle timeout configured: %.1f seconds", self.idle_timeout
                 )
 
                 # STEP 2: REQUEST LOOP
                 while not self.stop_event.is_set():
-
                     try:
                         request_data = receive_line(
-                            client_socket,
-                            timeout=self.idle_timeout
+                            client_socket, timeout=self.idle_timeout
                         )
 
                     except ValueError:
-                        logger.warning(
-                            "Request message too large"
-                        )
+                        logger.warning("Request message too large")
                         self.send_response(
                             client_socket,
                             active_username,
-                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST"),
                         )
                         break
 
@@ -246,33 +223,30 @@ class SocketServer:
                         self.send_response(
                             client_socket,
                             active_username,
-                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST"),
                         )
                         continue
                     # Handle heartbeat requests.
                     if request_type == "SYSTEM":
-
                         if request["action"] == "PING":
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response("PONG")
+                                AuthProtocolAdapter.encode_response("PONG"),
                             )
                             continue
                     # Handle UDP file transfer session requests.
                     if request_type == "FILE":
-
                         # FILE_SESSION requires successful TCP login.
                         if active_username is None:
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED")
+                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED"),
                             )
                             continue
 
                         if request["action"] == "FILE_SESSION":
-
                             # Reuse the existing ticket for this TCP session.
                             if file_ticket is None:
                                 try:
@@ -284,7 +258,7 @@ class SocketServer:
                                     logger.warning(
                                         "Failed to register UDP file session for %s: %s",
                                         active_username,
-                                        type(exc).__name__
+                                        type(exc).__name__,
                                     )
 
                                     self.send_response(
@@ -292,7 +266,7 @@ class SocketServer:
                                         active_username,
                                         AuthProtocolAdapter.encode_response(
                                             "FILE_SESSION_FAILED"
-                                        )
+                                        ),
                                     )
                                     continue
 
@@ -305,19 +279,16 @@ class SocketServer:
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                (json.dumps(response) + "\n").encode("utf-8")
+                                (json.dumps(response) + "\n").encode("utf-8"),
                             )
                             continue
                     # Handle authenticated user requests.
                     if request_type == "USER":
-
                         if active_username is None:
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response(
-                                    "AUTH_REQUIRED"
-                                )
+                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED"),
                             )
                             continue
 
@@ -334,20 +305,17 @@ class SocketServer:
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                (
-                                    json.dumps(response) + "\n"
-                                ).encode("utf-8")
+                                (json.dumps(response) + "\n").encode("utf-8"),
                             )
                             continue
 
                     if request_type == "MESSAGE":
-
                         # Authentication is required for messaging.
                         if active_username is None:
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED")
+                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED"),
                             )
                             continue
 
@@ -370,19 +338,17 @@ class SocketServer:
                                 success = self.message_router.send_unicast(
                                     sender=active_username,
                                     recipient=recipient,
-                                    message=message
+                                    message=message,
                                 )
 
                                 status = (
-                                    "UNICAST_SUCCESS"
-                                    if success
-                                    else "UNICAST_FAILED"
+                                    "UNICAST_SUCCESS" if success else "UNICAST_FAILED"
                                 )
 
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response(status)
+                                AuthProtocolAdapter.encode_response(status),
                             )
                             continue
 
@@ -393,8 +359,7 @@ class SocketServer:
                                 status = "INVALID_REQUEST"
                             else:
                                 delivered_count = self.message_router.send_broadcast(
-                                    sender=active_username,
-                                    message=message
+                                    sender=active_username, message=message
                                 )
 
                                 status = "BROADCAST_SUCCESS"
@@ -402,16 +367,15 @@ class SocketServer:
                                 logger.info(
                                     "Broadcast from %s delivered to %d clients",
                                     active_username,
-                                    delivered_count
+                                    delivered_count,
                                 )
 
                             self.send_response(
                                 client_socket,
                                 active_username,
-                                AuthProtocolAdapter.encode_response(status)
+                                AuthProtocolAdapter.encode_response(status),
                             )
                             continue
-
 
                     # Preserve existing authentication validation rules.
                     try:
@@ -421,7 +385,7 @@ class SocketServer:
                         self.send_response(
                             client_socket,
                             active_username,
-                            AuthProtocolAdapter.encode_response("INVALID_REQUEST")
+                            AuthProtocolAdapter.encode_response("INVALID_REQUEST"),
                         )
                         continue
 
@@ -442,9 +406,7 @@ class SocketServer:
 
                             if status == "LOGIN_SUCCESS":
                                 session_created = self.session_manager.add_session(
-                                    username,
-                                    client_address[0],
-                                    client_address[1]
+                                    username, client_address[0], client_address[1]
                                 )
 
                                 if not session_created:
@@ -463,7 +425,7 @@ class SocketServer:
                                         active_username = username
                                         logger.info(
                                             "Client registered in MessageRouter: %s",
-                                            username
+                                            username,
                                         )
                     else:
                         status = self.client_handler.process_auth_request(
@@ -474,53 +436,36 @@ class SocketServer:
                     self.send_response(
                         client_socket,
                         active_username,
-                        AuthProtocolAdapter.encode_response(status)
+                        AuthProtocolAdapter.encode_response(status),
                     )
 
-                    logger.info(
-                        "Authentication request processed"
-                    )
+                    logger.info("Authentication request processed")
 
         except ConnectionResetError as exc:
             if self.stop_event.is_set():
                 logger.info(
-                    "Client disconnected during server shutdown: %s",
-                    client_address
+                    "Client disconnected during server shutdown: %s", client_address
                 )
             else:
-                logger.warning(
-                    "Client connection reset: %s",
-                    exc
-                )
+                logger.warning("Client connection reset: %s", exc)
 
         except OSError:
             if self.stop_event.is_set():
-                logger.info(
-                    "Client socket closed during shutdown: %s",
-                    client_address
-                )
+                logger.info("Client socket closed during shutdown: %s", client_address)
             else:
-                logger.exception(
-                    "Unexpected client socket error: %s",
-                    client_address
-                )
+                logger.exception("Unexpected client socket error: %s", client_address)
 
         finally:
             # STEP 5: SESSION AND ROUTER CLEANUP
             if active_username is not None:
-
                 # Revoke UDP ticket when TCP connection ends.
                 if file_ticket is not None:
                     try:
                         self.file_relay.unregister_session(active_username)
-                        logger.info(
-                            "UDP file session revoked for %s",
-                            active_username
-                        )
+                        logger.info("UDP file session revoked for %s", active_username)
                     except Exception:
                         logger.exception(
-                            "Failed to revoke UDP file session for %s",
-                            active_username
+                            "Failed to revoke UDP file session for %s", active_username
                         )
 
                 # Remove TCP routing and authentication session.
@@ -529,34 +474,24 @@ class SocketServer:
 
                 if removed:
                     logger.info(
-                        "User disconnected and session removed: %s",
-                        active_username
+                        "User disconnected and session removed: %s", active_username
                     )
 
             # Remove socket from active connections.
             with self.clients_lock:
                 self.client_sockets.discard(client_socket)
-            
+
             # Return one connection slot when the client exits.
             self.client_semaphore.release()
-
 
     def start(self):
         """Start TCP server and accept multiple clients."""
 
         try:
-            with socket.socket(
-                socket.AF_INET,
-                socket.SOCK_STREAM
-            ) as server_socket:
-
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 self.server_socket = server_socket
 
-                server_socket.setsockopt(
-                    socket.SOL_SOCKET,
-                    socket.SO_REUSEADDR,
-                    1
-                )
+                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
                 server_socket.bind((self.host, self.port))
                 server_socket.listen(5)
@@ -572,19 +507,12 @@ class SocketServer:
                 # Periodically check for shutdown.
                 server_socket.settimeout(1.0)
 
-                logger.info(
-                    "Server listening on %s:%s",
-                    self.host,
-                    self.port
-                )
+                logger.info("Server listening on %s:%s", self.host, self.port)
 
                 # STEP 6: ACCEPT MULTIPLE CLIENTS
                 while not self.stop_event.is_set():
-
                     try:
-                        client_socket, client_address = (
-                            server_socket.accept()
-                        )
+                        client_socket, client_address = server_socket.accept()
 
                     except socket.timeout:
                         continue
@@ -592,20 +520,16 @@ class SocketServer:
                     # Register socket and start thread atomically.
                     # This prevents stop() from missing a newly
                     # accepted client during shutdown.
-                    
-                    with self.clients_lock:
 
+                    with self.clients_lock:
                         if self.stop_event.is_set():
                             client_socket.close()
                             break
 
                         # Reject connection if all slots are occupied.
-                        if not self.client_semaphore.acquire(
-                            blocking=False
-                        ):
+                        if not self.client_semaphore.acquire(blocking=False):
                             logger.warning(
-                                "Connection limit reached (%s)",
-                                self.max_clients
+                                "Connection limit reached (%s)", self.max_clients
                             )
                             client_socket.close()
                             continue
@@ -621,7 +545,7 @@ class SocketServer:
 
                         client_thread = threading.Thread(
                             target=self.handle_client,
-                            args=(client_socket, client_address)
+                            args=(client_socket, client_address),
                         )
 
                         self.client_threads.append(client_thread)
@@ -635,18 +559,11 @@ class SocketServer:
                             self.client_semaphore.release()
                             raise
 
-
-
-                    logger.info(
-                        "Client thread started: %s",
-                        client_thread.name
-                    )
+                    logger.info("Client thread started: %s", client_thread.name)
 
         except OSError:
             if self.stop_event.is_set():
-                logger.info(
-                    "Server stopped during shutdown"
-                )
+                logger.info("Server stopped during shutdown")
             else:
                 logger.exception("Socket server error")
 
@@ -710,7 +627,6 @@ class SocketServer:
         current_thread = threading.current_thread()
 
         for client_thread in client_threads:
-
             if client_thread is current_thread:
                 continue
 
@@ -720,22 +636,15 @@ class SocketServer:
             client_thread.join(timeout=5)
 
             if client_thread.is_alive():
-                logger.warning(
-                    "Client thread did not stop: %s",
-                    client_thread.name
-                )
+                logger.warning("Client thread did not stop: %s", client_thread.name)
 
         # STEP 4: Remove finished threads from tracking.
         with self.clients_lock:
             self.client_threads = [
-                thread
-                for thread in self.client_threads
-                if thread.is_alive()
+                thread for thread in self.client_threads if thread.is_alive()
             ]
 
         if self.shutdown_complete.wait(timeout=5):
             logger.info("Server shutdown completed")
         else:
-            logger.warning(
-                "Server shutdown is still in progress"
-            )
+            logger.warning("Server shutdown is still in progress")

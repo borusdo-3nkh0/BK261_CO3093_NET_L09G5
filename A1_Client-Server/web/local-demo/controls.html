@@ -1,0 +1,16 @@
+<template id="connection-template">    <details id="connection-settings" class="panel connection-panel" open>
+      <summary>Thiết lập kết nối <span class="muted">· trường draft, phụ thuộc P2</span></summary>
+      <form id="connect-form" class="connection-fields">
+        <label>Địa chỉ máy chủ (draft)<input id="host" value="localhost" required maxlength="100" autocomplete="off" aria-describedby="connection-help"></label>
+        <label>Cổng (draft)<input id="port" type="number" min="1" max="65535" value="9000" required></label>
+        <label>Tên hiển thị (draft)<input id="display-name" value="An" required maxlength="40" autocomplete="off"></label>
+        <button id="connect" type="submit">Kết nối mô phỏng</button>
+      </form>
+      <p id="connection-help" class="hint">Chỉ dùng thông tin giả. Các trường này không tạo kết nối hoặc xác thực thật.</p>
+    </details></template>
+<template id="scenario-template">    <section class="scenario-panel panel" aria-labelledby="scenario-heading">
+      <div><h2 id="scenario-heading">Bàn điều khiển mô phỏng</h2><p class="hint">Chạy lại để bắt đầu phiên mới. Mỗi bước phát một cập nhật từ adapter.</p></div>
+      <div class="scenario-controls"><label for="scenario">Kịch bản</label><select id="scenario"></select><button id="run" class="secondary">Chạy lại kịch bản</button><button id="step">Bước tiếp theo</button></div>
+      <p id="step-hint" class="hint" role="status">Chọn kết nối hoặc chạy một kịch bản.</p>
+    </section></template>
+<template id="file-template"><form id="file-form" class="attachment-tray"><label for="sample-file">File mẫu</label><select id="sample-file" disabled><option value="sample">bao-cao-mau.txt · 1.000 byte</option><option value="empty">rong.txt · 0 byte</option></select><button id="send-file" type="submit" class="secondary" disabled>Gửi file mẫu</button></form></template>

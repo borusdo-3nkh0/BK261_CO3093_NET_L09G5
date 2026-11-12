@@ -1,12 +1,10 @@
-
-import unittest
 import json
+import unittest
 
 from server.auth_protocol_adapter import AuthProtocolAdapter
 
 
 class TestAuthProtocolAdapter(unittest.TestCase):
-
     def test_decode_valid_request(self):
         data = b'{"action":"LOGIN","username":"alice","password":"demo123"}'
 
@@ -17,7 +15,7 @@ class TestAuthProtocolAdapter(unittest.TestCase):
         self.assertEqual(result["password"], "demo123")
 
     def test_decode_invalid_json(self):
-        data = b'not a json message'
+        data = b"not a json message"
 
         with self.assertRaises(ValueError):
             AuthProtocolAdapter.decode_request(data)
@@ -41,9 +39,7 @@ class TestAuthProtocolAdapter(unittest.TestCase):
             AuthProtocolAdapter.decode_request(data)
 
     def test_encode_response(self):
-        result = AuthProtocolAdapter.encode_response(
-            "LOGIN_SUCCESS"
-        )
+        result = AuthProtocolAdapter.encode_response("LOGIN_SUCCESS")
 
         self.assertTrue(result.endswith(b"\n"))
 

@@ -1,15 +1,14 @@
-from unittest.mock import patch
 import json
 import socket
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from server.socket_server import SocketServer
 
 
 class TestFileSessionIntegration(unittest.TestCase):
-
     def setUp(self):
         self.server = SocketServer(
             host="127.0.0.1",
@@ -42,7 +41,7 @@ class TestFileSessionIntegration(unittest.TestCase):
                         if probe.recv(1024) == b"WELCOME\n":
                             return
 
-                except (OSError, RuntimeError):
+                except OSError, RuntimeError:
                     pass
 
             time.sleep(0.02)
@@ -77,9 +76,7 @@ class TestFileSessionIntegration(unittest.TestCase):
         return bytes(data)
 
     def request(self, client, payload):
-        client.sendall(
-            (json.dumps(payload) + "\n").encode("utf-8")
-        )
+        client.sendall((json.dumps(payload) + "\n").encode("utf-8"))
         return json.loads(self.read_line(client))
 
     def login(self, client):
@@ -105,24 +102,16 @@ class TestFileSessionIntegration(unittest.TestCase):
 
     def test_file_session_requires_login(self):
         with self.connect() as client:
-            response = self.request(
-                client, {"action": "FILE_SESSION"}
-            )
-            self.assertEqual(
-                response["status"], "AUTH_REQUIRED"
-            )
+            response = self.request(client, {"action": "FILE_SESSION"})
+            self.assertEqual(response["status"], "AUTH_REQUIRED")
 
     def test_file_session_ready(self):
         with self.connect() as client:
             self.login(client)
 
-            response = self.request(
-                client, {"action": "FILE_SESSION"}
-            )
+            response = self.request(client, {"action": "FILE_SESSION"})
 
-            self.assertEqual(
-                response["status"], "FILE_SESSION_READY"
-            )
+            self.assertEqual(response["status"], "FILE_SESSION_READY")
             self.assertIn("ticket", response)
             self.assertEqual(
                 response["udp_port"],
@@ -133,44 +122,29 @@ class TestFileSessionIntegration(unittest.TestCase):
         with self.connect() as client:
             self.login(client)
 
-            first = self.request(
-                client, {"action": "FILE_SESSION"}
-            )
-            second = self.request(
-                client, {"action": "FILE_SESSION"}
-            )
+            first = self.request(client, {"action": "FILE_SESSION"})
+            second = self.request(client, {"action": "FILE_SESSION"})
 
-            self.assertEqual(
-                first["status"], "FILE_SESSION_READY"
-            )
+            self.assertEqual(first["status"], "FILE_SESSION_READY")
             self.assertEqual(first["ticket"], second["ticket"])
 
     def test_ticket_revoked_after_disconnect(self):
         client = self.connect()
         self.login(client)
 
-        response = self.request(
-            client, {"action": "FILE_SESSION"}
-        )
-        self.assertEqual(
-            response["status"], "FILE_SESSION_READY"
-        )
+        response = self.request(client, {"action": "FILE_SESSION"})
+        self.assertEqual(response["status"], "FILE_SESSION_READY")
 
         client.close()
 
         deadline = time.monotonic() + 3.0
 
         while time.monotonic() < deadline:
-            if (
-                self.server.session_manager.get_session("alice")
-                is None
-            ):
+            if self.server.session_manager.get_session("alice") is None:
                 break
             time.sleep(0.02)
 
-        self.assertIsNone(
-            self.server.session_manager.get_session("alice")
-        )
+        self.assertIsNone(self.server.session_manager.get_session("alice"))
         self.assertNotIn(
             "alice",
             self.server.file_relay._usernames,
@@ -179,30 +153,19 @@ class TestFileSessionIntegration(unittest.TestCase):
     def test_ping_before_login(self):
         """PING should work after handshake without login."""
         with self.connect() as client:
-            response = self.request(
-                client,
-                {"action": "PING"}
-            )
+            response = self.request(client, {"action": "PING"})
 
-            self.assertEqual(
-                response["status"],
-                "PONG"
-            )
+            self.assertEqual(response["status"], "PONG")
 
     def test_ping_after_login(self):
         """PING should work after successful login."""
         with self.connect() as client:
             self.login(client)
 
-            response = self.request(
-                client,
-                {"action": "PING"}
-            )
+            response = self.request(client, {"action": "PING"})
 
-            self.assertEqual(
-                response["status"],
-                "PONG"
-            )
+            self.assertEqual(response["status"], "PONG")
+
     def test_file_session_registration_failure(self):
         """Relay failure must not terminate TCP connection."""
         with self.connect() as client:
@@ -213,32 +176,21 @@ class TestFileSessionIntegration(unittest.TestCase):
                 "register_session",
                 side_effect=RuntimeError("Relay unavailable"),
             ):
-                response = self.request(
-                    client,
-                    {"action": "FILE_SESSION"}
-                )
+                response = self.request(client, {"action": "FILE_SESSION"})
 
-            self.assertEqual(
-                response["status"],
-                "FILE_SESSION_FAILED"
-            )
+            self.assertEqual(response["status"], "FILE_SESSION_FAILED")
 
             # TCP connection must remain usable.
-            response = self.request(
-                client,
-                {"action": "PING"}
-            )
+            response = self.request(client, {"action": "PING"})
 
             self.assertEqual(response["status"], "PONG")
+
     def test_cleanup_continues_when_udp_revoke_fails(self):
         """TCP session must be cleaned up even if UDP revoke fails."""
         client = self.connect()
         self.login(client)
 
-        response = self.request(
-            client,
-            {"action": "FILE_SESSION"}
-        )
+        response = self.request(client, {"action": "FILE_SESSION"})
         self.assertEqual(response["status"], "FILE_SESSION_READY")
 
         with patch.object(
@@ -255,9 +207,7 @@ class TestFileSessionIntegration(unittest.TestCase):
                     break
                 time.sleep(0.02)
 
-            self.assertIsNone(
-                self.server.session_manager.get_session("alice")
-            )
+            self.assertIsNone(self.server.session_manager.get_session("alice"))
 
     def test_relay_closes_after_client_cleanup(self):
         """UDP Relay must close after TCP client cleanup."""
@@ -265,22 +215,14 @@ class TestFileSessionIntegration(unittest.TestCase):
         client = self.connect()
         self.login(client)
 
-        response = self.request(
-            client,
-            {"action": "FILE_SESSION"}
-        )
-        self.assertEqual(
-            response["status"],
-            "FILE_SESSION_READY"
-        )
+        response = self.request(client, {"action": "FILE_SESSION"})
+        self.assertEqual(response["status"], "FILE_SESSION_READY")
 
         cleanup_started = threading.Event()
         allow_cleanup = threading.Event()
         relay_closed = threading.Event()
 
-        original_unregister = (
-            self.server.file_relay.unregister_session
-        )
+        original_unregister = self.server.file_relay.unregister_session
         original_close = self.server.file_relay.close
 
         def delayed_unregister(username):
@@ -296,14 +238,17 @@ class TestFileSessionIntegration(unittest.TestCase):
             return original_close()
 
         try:
-            with patch.object(
-                self.server.file_relay,
-                "unregister_session",
-                side_effect=delayed_unregister,
-            ), patch.object(
-                self.server.file_relay,
-                "close",
-                side_effect=tracked_close,
+            with (
+                patch.object(
+                    self.server.file_relay,
+                    "unregister_session",
+                    side_effect=delayed_unregister,
+                ),
+                patch.object(
+                    self.server.file_relay,
+                    "close",
+                    side_effect=tracked_close,
+                ),
             ):
                 # Trigger TCP client cleanup.
                 client.close()
@@ -334,17 +279,14 @@ class TestFileSessionIntegration(unittest.TestCase):
                 shutdown_thread.join(timeout=6)
                 self.server_thread.join(timeout=6)
 
-                self.assertFalse(
-                    shutdown_thread.is_alive()
-                )
-                self.assertFalse(
-                    self.server_thread.is_alive()
-                )
+                self.assertFalse(shutdown_thread.is_alive())
+                self.assertFalse(self.server_thread.is_alive())
                 self.assertTrue(relay_closed.is_set())
 
         finally:
             allow_cleanup.set()
             client.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,6 @@
-
-import threading
 import json
 import socket
+import threading
 
 
 class MessageRouter:
@@ -78,7 +77,7 @@ class MessageRouter:
 
             return True
 
-        except (OSError, socket.timeout):
+        except OSError, socket.timeout:
             return False
 
     def send_unicast(self, sender, recipient, message):
@@ -97,17 +96,14 @@ class MessageRouter:
             "type": "UNICAST",
             "sender": sender,
             "recipient": recipient,
-            "message": message
+            "message": message,
         }
 
-        encoded_message = (
-            json.dumps(payload, ensure_ascii=False) + "\n"
-        ).encode("utf-8")
-
-        return self.send_to_client(
-            recipient,
-            encoded_message
+        encoded_message = (json.dumps(payload, ensure_ascii=False) + "\n").encode(
+            "utf-8"
         )
+
+        return self.send_to_client(recipient, encoded_message)
 
     def send_broadcast(self, sender, message):
         """Send a message to all online clients except sender."""
@@ -118,23 +114,15 @@ class MessageRouter:
         if not isinstance(message, str) or not message:
             return 0
 
-        payload = {
-            "type": "BROADCAST",
-            "sender": sender,
-            "message": message
-        }
+        payload = {"type": "BROADCAST", "sender": sender, "message": message}
 
-        encoded_message = (
-            json.dumps(payload, ensure_ascii=False) + "\n"
-        ).encode("utf-8")
+        encoded_message = (json.dumps(payload, ensure_ascii=False) + "\n").encode(
+            "utf-8"
+        )
 
         # Snapshot recipients without holding the lock during I/O.
         with self.lock:
-            recipients = [
-                username
-                for username in self.clients
-                if username != sender
-            ]
+            recipients = [username for username in self.clients if username != sender]
 
         success_count = 0
 

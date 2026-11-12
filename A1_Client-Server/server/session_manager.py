@@ -1,4 +1,3 @@
-
 import logging
 import threading
 
@@ -29,16 +28,14 @@ class SessionManager:
 
         with self._lock:
             if username in self.sessions:
-                logger.warning(
-                    "User already has an active session"
-                )
+                logger.warning("User already has an active session")
                 return False
 
             self.sessions[username] = {
                 "username": username,
                 "ip": ip,
                 "port": port,
-                "status": "online"
+                "status": "online",
             }
 
         logger.info("Session created for user: %s", username)

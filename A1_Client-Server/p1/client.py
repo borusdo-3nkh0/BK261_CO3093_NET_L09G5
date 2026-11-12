@@ -16,14 +16,16 @@ from pathlib import Path
 from shared.protocol import (
     CHUNK_SIZE,
     MAX_DATAGRAM,
+    ZERO_ID,
     FileOffer,
-    MessageType as Kind,
     Packet,
     ProtocolError,
-    ZERO_ID,
     decode_packet,
     encode_packet,
     file_digest,
+)
+from shared.protocol import (
+    MessageType as Kind,
 )
 
 
@@ -255,7 +257,7 @@ class FileClient:
     def _best_effort(self, kind, transfer_id, payload=b""):
         try:
             self._send(kind, transfer_id, payload=payload)
-        except (OSError, TransferError):
+        except OSError, TransferError:
             pass
 
     def _run(self):
@@ -271,7 +273,7 @@ class FileClient:
                 self._handle(packet)
             except socket.timeout:
                 pass
-            except (ProtocolError, UnicodeError, TransferError):
+            except ProtocolError, UnicodeError, TransferError:
                 pass
             except OSError:
                 if not self._stop.is_set():
@@ -371,7 +373,7 @@ class FileClient:
         if self.auto_accept:
             try:
                 self.accept_file(transfer_id)
-            except (OSError, TransferError):
+            except OSError, TransferError:
                 self._discard_incoming(transfer_id, b"DISK_ERROR", notify=True)
 
     def accept_file(self, transfer_id):
@@ -421,7 +423,7 @@ class FileClient:
     def _verify(self, transfer_id, incoming):
         try:
             result = incoming.verify(self._stop.is_set)
-        except (OSError, TransferError):
+        except OSError, TransferError:
             self._discard_incoming(transfer_id, b"INTEGRITY_OR_DISK_ERROR", notify=True)
             return
         with self._lock:

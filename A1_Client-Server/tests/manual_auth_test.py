@@ -1,16 +1,10 @@
-
 import json
 
 from server.socket_server import SocketServer
 
-
 server = SocketServer()
 
-request = {
-    "action": "REGISTER",
-    "username": "alice",
-    "password": "demo123"
-}
+request = {"action": "REGISTER", "username": "alice", "password": "demo123"}
 
 data = json.dumps(request).encode("utf-8")
 

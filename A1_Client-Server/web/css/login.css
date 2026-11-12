@@ -1,0 +1,10 @@
+#login-dialog { width: min(390px, calc(100vw - 32px)); border: 1px solid #e6eaf0; border-radius: 16px; padding: 24px; }
+#login-dialog::backdrop { background: #14213980; }
+#login-form { display: grid; gap: 16px; }
+#login-form h2 { font-size: 20px; margin: 0; }
+#login-form label { display: grid; gap: 6px; }
+#login-form input { width: 100%; min-width: 0; font: inherit; }
+#login-error { color: #a32632; margin: 0; overflow-wrap: anywhere; }
+.login-actions { display: flex; justify-content: flex-end; gap: 8px; }
+#login-open { flex-shrink: 0; }
+@media (max-width: 450px) { #login-open { padding: 6px 8px; font-size: 12px; } }

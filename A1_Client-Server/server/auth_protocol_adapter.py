@@ -1,4 +1,3 @@
-
 import json
 
 
@@ -33,11 +32,7 @@ class AuthProtocolAdapter:
         if not isinstance(password, str):
             raise ValueError("Invalid password")
 
-        return {
-            "action": action,
-            "username": username,
-            "password": password
-        }
+        return {"action": action, "username": username, "password": password}
 
     @staticmethod
     def encode_response(status: str) -> bytes:

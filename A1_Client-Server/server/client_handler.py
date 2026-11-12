@@ -1,8 +1,6 @@
-
 import logging
 
 from server.auth_manager import AuthManager
-
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +35,7 @@ class ClientHandler:
 
         return result
 
-    def process_auth_request(
-        self,
-        action: str,
-        username: str,
-        password: str
-    ) -> str:
+    def process_auth_request(self, action: str, username: str, password: str) -> str:
         """Process an authentication request."""
 
         if action == "REGISTER":

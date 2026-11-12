@@ -13,7 +13,6 @@ import time
 import unittest
 from pathlib import Path
 
-
 APP = Path(__file__).resolve().parents[1]
 
 

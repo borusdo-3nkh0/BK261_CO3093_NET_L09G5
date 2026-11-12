@@ -1,4 +1,3 @@
-
 import hashlib
 import hmac
 import secrets
@@ -25,10 +24,7 @@ class AuthManager:
         salt = secrets.token_bytes(16)
 
         password_hash = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            salt,
-            600_000
+            "sha256", password.encode("utf-8"), salt, 600_000
         )
 
         # Check and insert atomically.
@@ -36,10 +32,7 @@ class AuthManager:
             if username in self.users:
                 return False
 
-            self.users[username] = {
-                "salt": salt,
-                "password_hash": password_hash
-            }
+            self.users[username] = {"salt": salt, "password_hash": password_hash}
 
         return True
 
@@ -64,13 +57,7 @@ class AuthManager:
 
         # Perform expensive hashing outside the lock.
         password_hash = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            salt,
-            600_000
+            "sha256", password.encode("utf-8"), salt, 600_000
         )
 
-        return hmac.compare_digest(
-            password_hash,
-            stored_hash
-        )
+        return hmac.compare_digest(password_hash, stored_hash)
