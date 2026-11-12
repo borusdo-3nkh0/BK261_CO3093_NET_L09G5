@@ -18,6 +18,8 @@ def test_reference_p2_file_session_unavailable_keeps_chat(tmp_path):
     default = Path(__file__).resolve().parents[2] / "../MMT-P2/A1_Client-Server"
     root = Path(os.environ.get("CONNECT_P2_ROOT", default)).resolve()
     if not (root / "server/socket_server.py").is_file():
+        if os.environ.get("CONNECT_REQUIRE_INTEGRATION") == "1":
+            pytest.fail("Required P2 checkout is missing; set CONNECT_P2_ROOT")
         pytest.skip("Real P2 reference checkout is not available")
     bootstrap = """
 import json, sys, threading, time

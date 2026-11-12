@@ -5,7 +5,7 @@ const path = require("node:path");
 const net = require("node:net");
 const { spawn } = require("node:child_process");
 const assert = require("node:assert/strict");
-const { chromeExecutable, pythonExecutable } = require("./browser-support.cjs");
+const { chromeExecutable, pythonExecutable, stopProcess, writeReport } = require("./browser-support.cjs");
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const onlineStub = process.argv.includes("--online-stub");
 const onlineUnsupported = process.argv.includes("--online-unsupported");
@@ -13,12 +13,12 @@ const onlineOnly = process.argv.includes("--online-only");
 assert.ok(!(onlineStub && onlineUnsupported), "Select one online fixture mode");
 const onlineSupported = !onlineUnsupported;
 const onlineSourceLabel = onlineStub ? "test-only draft server" : onlineUnsupported ? "server without LIST_ONLINE (fallback)" : "real P2";
-const output = path.resolve("runtime/reviews/p2-online-2026-11-10", onlineStub ? "stub" : onlineUnsupported ? "fallback" : "real");
+const output = path.resolve(process.env.CONNECT_TEST_OUTPUT || "runtime/p3/p2", "p2-" + crypto.randomUUID());
 const httpPort = Number(process.argv[2] || 8766), tcpPort = Number(process.argv[3] || 5000);
 const peers = [];
 const trace = [];
 let phase = "setup";
-let browser, websocket, relay, relayBridge;
+let browser, websocket, relay, relayBridge, profile, browserError, bridgeError;
 let activeReport;
 const relaySockets = [];
 
@@ -112,13 +112,15 @@ async function main() {
   seed.send({ action: "REGISTER", username, password });
   assert.equal((await seed.read()).status, "REGISTER_SUCCESS"); seed.socket.destroy();
 
-  const profile = await fs.mkdtemp(path.join(output, "chrome-profile-"));
+  profile = await fs.mkdtemp(path.join(output, "chrome-profile-"));
   browser = spawn(chromeExecutable(), [
     "--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile,
     "--no-first-run", "--no-default-browser-check", "about:blank",
-  ], { windowsHide: true, stdio: "ignore" });
+  ], { windowsHide: true, detached: process.platform !== "win32", stdio: "ignore" });
+  browser.on("error", error => { browserError = error; });
   let port;
   for (let n = 0; n < 100; n++) {
+    if (browserError) throw browserError;
     try { port = (await fs.readFile(path.join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]; break; } catch {}
     await sleep(100);
   }
@@ -155,6 +157,7 @@ async function main() {
     for (let n = 0; n < 150; n++) { if (await evaluate(expression)) return; await sleep(100); }
     throw new Error("DOM timeout: " + expression + " / " + await evaluate("document.body.innerText"));
   }
+  const sent = text => until(`Array.from(document.querySelectorAll('.outgoing')).some(row => row.querySelector('.message-body')?.textContent === ${JSON.stringify(text)} && row.querySelector('.message-status')?.textContent === 'Đã gửi') && document.getElementById('message-input').value === ''`);
   async function click(id) {
     const rect = await evaluate(`document.getElementById(${JSON.stringify(id)}).getBoundingClientRect().toJSON()`);
     for (const type of ["mousePressed", "mouseReleased"]) await cdp("Input.dispatchMouseEvent", { type, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, button: "left", clickCount: 1 });
@@ -194,7 +197,7 @@ async function main() {
       const outgoing = `A chủ động tìm B và gửi riêng ${width}`;
       await type("message-input", outgoing); await click("send");
       assert.deepEqual(await B.read(), { type: "UNICAST", sender: username, recipient: B.username, message: outgoing });
-      await until("Array.from(document.querySelectorAll('.outgoing .message-status')).at(-1)?.textContent === 'Đã gửi'");
+      await sent(outgoing);
       const draft = `Nháp giữ khi B offline ${width}`;
       await type("message-input", draft);
       const bName = B.username, closedAt = Date.now(); B.socket.destroy();
@@ -232,15 +235,16 @@ async function main() {
     const text = "Kênh chung sau kiểm tra online/fallback";
     await type("message-input", text); await click("send");
     assert.deepEqual(await B.read(), { type: "BROADCAST", sender: username, message: text });
-    await until("Array.from(document.querySelectorAll('.outgoing .message-status')).at(-1)?.textContent === 'Đã gửi'");
+    await sent(text);
     report.ui = { twoAccounts: [username, B.username], broadcastAfterOnlineCheck: true, ackConfirmed: true };
     await click("disconnect"); await until("document.getElementById('connection-state').textContent === 'Chưa kết nối'");
     await Promise.all(captures);
     assert.equal(report.captureErrors.length, 0);
     assert.ok(report.snapshots.some(event => event.data.onlineStatus === (onlineSupported ? "available" : "unavailable")));
     report.completedAt = new Date().toISOString(); report.trace = trace;
-    await fs.writeFile(path.join(output, "results.json"), JSON.stringify(report, null, 2));
-    await fs.writeFile(path.join(output, runId + ".json"), JSON.stringify(report, null, 2));
+    report.status = "PASS";
+    await writeReport(path.join(output, "results.json"), report);
+    await writeReport(path.join(output, runId + ".json"), report);
     console.log(JSON.stringify({ online: report.online, ui: report.ui, snapshots: report.snapshots.length, result: "PASS" }));
     await cdp("Browser.close");
     return;
@@ -248,7 +252,7 @@ async function main() {
   const text = "UI thật → Kênh chung: cả nhóm kiểm tra nội dung tiếng Việt ✓";
   await type("message-input", text); await click("send");
   for (const peer of [B, C]) assert.deepEqual(await peer.read(), { type: "BROADCAST", sender: username, message: text });
-  await until("document.querySelector('.outgoing .message-status')?.textContent === 'Đã gửi'");
+  await sent(text);
   B.send({ action: "BROADCAST", message: "TCP → UI: <b>văn bản an toàn</b>" });
   assert.equal((await B.read()).status, "BROADCAST_SUCCESS");
   await C.read();
@@ -287,7 +291,7 @@ async function main() {
     assert.equal(await evaluate("document.getElementById('message-input').value"), reply);
     await click("send");
     assert.deepEqual(await B.read(), { type: "UNICAST", sender: username, recipient: B.username, message: reply });
-    await until("Array.from(document.querySelectorAll('.outgoing .message-status')).at(-1)?.textContent === 'Đã gửi'");
+    await sent(reply);
     await sleep(10000);
     assert.equal(B.lines.length, 0); assert.equal(C.lines.length, 0);
     const canary = `C còn kết nối ${width}`;
@@ -356,9 +360,9 @@ async function main() {
   await new Promise(resolve => relay.listen(0, "127.0.0.1", resolve));
   const spare = net.createServer(); await new Promise(resolve => spare.listen(0, "127.0.0.1", resolve));
   const relayHttpPort = spare.address().port; await new Promise(resolve => spare.close(resolve));
-  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "bridge.py", "--port", String(relayHttpPort), "--p2-port", String(relay.address().port)], { windowsHide: true, stdio: "ignore" });
-  relayBridge.on("error", error => { throw error; });
-  for (let n = 0; n < 100; n++) { try { if ((await fetch(`http://127.0.0.1:${relayHttpPort}/`)).ok) break; } catch {} await sleep(100); }
+  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "bridge.py", "--port", String(relayHttpPort), "--p2-port", String(relay.address().port)], { windowsHide: true, detached: process.platform !== "win32", stdio: "ignore" });
+  relayBridge.on("error", error => { bridgeError = error; });
+  for (let n = 0; n < 100; n++) { if (bridgeError) throw bridgeError; try { if ((await fetch(`http://127.0.0.1:${relayHttpPort}/`, { signal: AbortSignal.timeout(1000) })).ok) break; } catch {} await sleep(100); }
   const relayB = new Peer(); await relayB.handshake();
   relayB.username = runId + "-relay-b";
   relayB.send({ action: "REGISTER", username: relayB.username, password }); assert.equal((await relayB.read()).status, "REGISTER_SUCCESS");
@@ -403,7 +407,7 @@ async function main() {
   assert.equal(await evaluate("Array.from(document.querySelectorAll('.outgoing .message-status')).at(-1).textContent"), "Chưa xác định kết quả");
   assert.equal(await evaluate("Array.from(document.querySelectorAll('.outgoing .message-status')).some(n => !n.hidden && n.textContent === 'Đã gửi')"), false);
   report.interleaving = { realP2WithTestOnlyAckRelay: !onlineStub, simulatedServerWithTestOnlyAckRelay: onlineStub, preExistingUiPairReused: true, privateIncomingBeforeAck: true, broadcastIncomingBeforeAck: true, pendingStatusUnchangedByIncoming: true, crossConversationSendRejected: true, newDraftPreserved: true, timeoutSeconds: 10, timeoutUnknown: true };
-  relayBridge.kill(); relayBridge = null; for (const sock of relaySockets) sock.destroy(); await new Promise(resolve => relay.close(resolve)); relay = null;
+  await stopProcess(relayBridge); relayBridge = null; for (const sock of relaySockets) sock.destroy(); await new Promise(resolve => relay.close(resolve)); relay = null;
   for (const peer of peers) peer.socket.destroy();
   console.log(JSON.stringify({ online: report.online, tcp: report.tcp, ui: report.ui, privateWeb: report.privateWeb, unicastFailed: report.unicastFailed, interleaving: report.interleaving }));
 
@@ -440,17 +444,25 @@ async function main() {
   console.log(JSON.stringify({ onlineUiChecks: report.onlineUiChecks.passed }));
   report.completedAt = new Date().toISOString();
   report.trace = trace;
-  await fs.writeFile(path.join(output, "results.json"), JSON.stringify(report, null, 2));
+  report.status = "PASS";
+  await writeReport(path.join(output, "results.json"), report);
   await cdp("Browser.close");
 }
-main().catch(async error => {
+const interrupted = new Promise((_, reject) => {
+  for (const name of ["SIGINT", "SIGTERM"]) process.once(name, () => reject(new Error("Runner interrupted")));
+});
+Promise.race([main(), interrupted]).catch(async error => {
   console.error(error); process.exitCode = 1;
   if (activeReport) {
     const failure = { ...activeReport, phase, error: error.message, trace, failedAt: new Date().toISOString() };
-    await fs.writeFile(path.join(output, activeReport.runId + "-failure.json"), JSON.stringify(failure, null, 2));
+    await writeReport(path.join(output, activeReport.runId + "-failure.json"), { ...failure, status: "FAIL" });
   }
-}).finally(() => {
+}).finally(async () => {
   for (const peer of peers) peer.socket.destroy();
-  websocket?.close(); if (browser && !browser.killed) browser.kill();
-  relayBridge?.kill(); for (const sock of relaySockets) sock.destroy(); relay?.close();
+  websocket?.close(); await stopProcess(browser);
+  await stopProcess(relayBridge); for (const sock of relaySockets) sock.destroy(); relay?.close();
+  if (profile) {
+    assert.ok(path.resolve(profile).startsWith(output + path.sep));
+    await fs.rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
 });

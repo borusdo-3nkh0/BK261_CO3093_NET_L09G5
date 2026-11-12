@@ -1,5 +1,31 @@
 # Kế hoạch kiểm thử P3
 
+Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Từ lượt nâng cấp CLI/CI, dùng `python -B p3.py check --suite ...`; output theo UUID, không còn dùng đường dẫn evidence cố định theo ngày trong các lệnh lịch sử bên dưới. Source/revision và kết quả CI phải đọc từ report/run thực tế; Security v2 vẫn draft.
+
+## CLI, runner và CI P3 — 2026-11-12
+
+Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.FaultRelay, docs/validation.md và workflow p1.yml. P3 tận dụng CLI demo/check, process riêng và SHA ghim, không sao chép thuật toán mạng hoặc sửa source P1/P2. Production bridge/UI/security không đổi trong lượt này.
+
+| Kiểm tra thực chạy trên Windows/Python 3.14.4 | Kết quả |
+| --- | --- |
+| CLI tổng hợp `check --suite all --timeout 600`, run check-6050520723644b7dadcac8d821b329d8 | PASS 4 suite, 134,452s; 109 Python độc lập + 5 P1 + 1 P2, không skip; đây là trước khi thêm một test từ chối source dirty |
+| Lượt cuối có Windows Job Object, check-ac19f7a916754b56b47f157982b9609c | PASS 4 suite; 111 Python độc lập + 5 P1 + 1 P2 = **117**, không skip trên Windows; job-close có test process cha đã thoát nhưng process con vẫn bị dọn |
+| Supervisor tham gia job trước khi chạy venv shim, check-d9f9343f470f49f9a33be391a064f6db | Independent PASS 17,863s, gồm 17 test CLI/lifecycle; lỗi/timeout/cleanup và JS đạt. Linux dùng process group; test chỉ dành Windows được skip rõ trên Linux |
+| Lượt independent/UI mới check-969afb1ca665420491f9a61e8ab21ef0 | PASS; 110 Python độc lập, Ruff/JS và UI/demo; P1/P2 SKIP đúng lý do Not selected |
+| pytest đầy đủ trước test dirty cuối | 115 passed/29,17s; test dirty bổ sung được chạy qua independent ở dòng trên |
+| UI suite | 234 kiểm tra mỗi 1440×900/1366×768/1100×750, 238 ở 390×844; gồm 15 online checks trước chỉ chạy trong runner P2 |
+| Demo | 33 smoke + 37 company ở desktop/mobile, reset/kịch bản không đổi |
+| Helper Node | 6 test mới: EOF, timeout, socket error, redaction, stop process và timeout runner ghi FAIL; giữ 4 assertion cấu hình có sẵn |
+| P1 ghim | 35 unittest gốc đạt; 5 pytest bridge, gồm hai ca FaultRelay mới: phục hồi giữ ID/progress/hash và hash sai không publish/download, tác vụ file rỗng kế tiếp đạt |
+| File browser/P1 UDP thật | Gửi/nhận 65.539 byte khớp hash, accept/reject và quyền tải đạt; control/ticket là fixture, không phải P2 thật |
+| P2 ghim | Login, chat chung/riêng, online/offline, giữ nháp, ACK xen kẽ/timeout đạt; FILE_SESSION vẫn chưa hỗ trợ |
+| Đường lỗi bắt buộc | Missing P1/P2, revision sai/source dirty, toàn skip/0 testcase, deadline không hữu hạn, exit khác 0 và kill cây process: có test, phải FAIL thay vì báo thành công |
+| Report | Audit JSON PASS; canary token/ticket/key/password bị loại; profile/file thử được dọn, evidence công khai ở runtime/p3/checks/ |
+
+Lượt check-41302a50adde4bdd97f51be3627d6bc7 có P2-browser FAIL: chờ nhãn Đã gửi có thể khớp tin cũ, rồi nối nháp vào composer chưa được giải phóng. Đã sửa **test** chờ đúng message-body của tin vừa gửi và input rỗng; giữ nguyên assertion nháp và production. Lượt p2 riêng check-fa8a635ffab747b8bb3b51299f102628 đạt 77,38s; lượt all sau đó đạt. Không che thất bại hoặc sửa logic nghiệp vụ để pass.
+
+CI Windows/Ubuntu Python 3.14 được cấu hình trong p3.yml, chỉ đánh dấu đã chạy khi có URL/run và conclusion thực tế. WSL AlmaLinux trên máy chưa có Python 3.14/Node/Chrome, không dùng để khẳng định Linux đạt. LAN, file lớn, FILE_SESSION P2 thật và Security v2 chưa nghiệm thu. Xem checklist [testing.md](testing.md) và phần báo cáo [p3-report.md](p3-report.md).
+
 ## Bàn giao vào MMT-P3/A1_Client-Server — 2026-11-12
 
 Đã chạy ngay trong checkout mới, bằng `.venv` mới Python 3.14.4; Node 24.21.0 và Chrome 156. P1 b085721 và P2 fbf53eb là checkout tham chiếu riêng, không copy source P1/P2 vào nhánh P3. Đã assert đường dẫn bridge, bridge_files, security.payload, WEB và Python executable nằm trong checkout mới; bridge con của runner cũng dùng `.venv` tại đây. Không dùng source/venv P3 từ MMT(BTL).

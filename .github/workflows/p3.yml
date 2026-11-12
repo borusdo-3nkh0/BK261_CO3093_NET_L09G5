@@ -1,0 +1,68 @@
+name: P3 Connect checks
+
+on:
+  push:
+    branches: [duc-p3-web-security-integration, p3-web-security-integration]
+    paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
+  pull_request:
+    paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p3-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.os }} Python 3.14
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    defaults:
+      run:
+        working-directory: A1_Client-Server
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: borusdo-3nkh0/BK261_CO3093_NET_L09G5
+          ref: b08572182705912b32b639ca3e8bc150265c4954
+          path: references/p1
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: borusdo-3nkh0/BK261_CO3093_NET_L09G5
+          ref: fbf53eb35583ea9eabd9639acaf59fbab4675567
+          path: references/p2
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+      - run: python -m pip install --group dev
+      - run: python -m pip check
+      - name: Independent, UI/demo, pinned P1 and real P2
+        run: python -B p3.py check --suite all --p1-root ../references/p1/A1_Client-Server --p2-root ../references/p2/A1_Client-Server --timeout 600
+      - name: Public reports and failure evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: p3-${{ matrix.os }}-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            A1_Client-Server/runtime/p3/checks/**/report.json
+            A1_Client-Server/runtime/p3/checks/**/results.json
+            A1_Client-Server/runtime/p3/checks/**/*failure.json
+            A1_Client-Server/runtime/p3/checks/**/*.log
+            A1_Client-Server/runtime/p3/checks/**/*.xml
+            A1_Client-Server/runtime/p3/checks/**/*.png

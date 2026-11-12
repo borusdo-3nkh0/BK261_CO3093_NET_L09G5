@@ -1,5 +1,11 @@
 # Công việc P3 và điều kiện hoàn thành
 
+## Nâng cấp kiểm thử/CLI/CI — 2026-11-12
+
+Đã thêm p3.py check/demo, runner config/output theo UUID, timeout/cleanup/report và redaction; tích hợp chọn bắt buộc không được toàn skip hoặc dùng revision sai/source dirty. UI/demo giữ renderer và dữ liệu cũ. Thêm test bridge với FaultRelay P1; chạy suite P1 gốc. Hướng dẫn hiện hành ở testing.md, đóng góp báo cáo ở p3-report.md; lịch sử ở test-plan.md.
+
+Workflow p3.yml dùng Windows/Ubuntu Python 3.14 và Node 24, checkout riêng SHA P1/P2. Trạng thái chạy CI phải đối chiếu run thực tế, không suy ra từ việc có YAML. Security v2 vẫn draft; file xuyên suốt P2 thật, LAN và file lớn còn chờ.
+
 ## Bàn giao checkout P3 — 2026-11-12
 
 | Phần việc | Trạng thái | Điều kiện/kết quả |

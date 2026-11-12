@@ -1,6 +1,7 @@
 """Optional reference integration: real P1 UDP, no P2 or network simulation."""
 
 import hashlib
+import importlib.util
 import io
 import os
 from pathlib import Path
@@ -12,15 +13,28 @@ from bridge_files import FileService, load_p1
 
 
 @pytest.fixture
-def p1_services(tmp_path):
+def p1_services(tmp_path, request):
     default = Path(__file__).resolve().parents[2] / "../MMT-P1/A1_Client-Server"
     root = Path(os.environ.get("CONNECT_P1_ROOT", default)).resolve()
     if not (root / "p1/client.py").is_file():
+        if os.environ.get("CONNECT_REQUIRE_INTEGRATION") == "1":
+            pytest.fail("Required P1 checkout is missing; set CONNECT_P1_ROOT")
         pytest.skip("Set CONNECT_P1_ROOT to run real P1 reference integration")
     factory = load_p1(root)
     from p1.relay import FileRelay
 
-    relay = FileRelay(port=0).start()
+    mode = getattr(request, "param", None)
+    if mode:
+        spec = importlib.util.spec_from_file_location(
+            "p1_reference_faults", root / "tests/test_udp_transfer.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        relay = module.FaultRelay(
+            faults=mode == "faults", bad_hash=mode == "bad_hash"
+        ).start()
+    else:
+        relay = FileRelay(port=0).start()
     events_a, events_b = [], []
     a = FileService(
         "alice",
@@ -110,3 +124,58 @@ def test_real_p1_close_while_waiting_releases_staging(p1_services):
     wait(lambda: len(b.records) == 1)
     a.close_async()
     assert a.closed.wait(5) and not a.root.exists()
+
+
+@pytest.mark.parametrize("p1_services", ["faults"], indirect=True)
+def test_real_p1_fault_recovery_keeps_bridge_ids_progress_and_hash(p1_services):
+    a, b, events_a, _ = p1_services
+    payload = bytes(range(256)) * 40 + b"partial"
+    meta = metadata()
+    a.upload(meta, len(payload), io.BytesIO(payload))
+    wait(lambda: len(b.records) == 1, timeout=15)
+    wire = next(iter(b.records))
+    assert b.decide(wire, True)
+    wait(
+        lambda: a.records[meta["transferId"]]["data"]["status"] == "completed",
+        timeout=30,
+    )
+    updates = [
+        data
+        for kind, data in events_a
+        if kind == "transfer.upsert" and data["transferId"] == meta["transferId"]
+    ]
+    assert {data["transferId"] for data in updates} == {meta["transferId"]}
+    counts = [data["transferredBytes"] for data in updates]
+    assert counts == sorted(counts) and counts[-1] == len(payload)
+    with b.download(wire) as (stream, _):
+        assert stream.read() == payload
+    wait(lambda: a.active is None)
+    assert a.used_bytes == 0 and not list(a.root.glob("upload-*"))
+
+
+@pytest.mark.parametrize("p1_services", ["bad_hash"], indirect=True)
+def test_real_p1_hash_failure_is_not_published_and_next_empty_file_works(p1_services):
+    a, b, _, events_b = p1_services
+    meta = metadata()
+    a.upload(meta, 1025, io.BytesIO(b"x" * 1025))
+    wait(lambda: len(b.records) == 1)
+    wire = next(iter(b.records))
+    assert b.decide(wire, True)
+    wait(lambda: b.records[wire]["data"]["status"] == "failed")
+    wait(lambda: a.active is None)
+    assert a.records[meta["transferId"]]["data"]["status"] == "failed"
+    assert not any(
+        kind == "transfer.upsert" and data["status"] == "completed"
+        for kind, data in events_b
+    )
+    with pytest.raises(ValueError):
+        with b.download(wire):
+            pass
+    assert not any(path.is_file() for path in b.downloads.rglob("*"))
+    assert a.used_bytes == b.used_bytes == 0
+    retry = metadata()
+    a.upload(retry, 0, io.BytesIO())
+    wait(lambda: len(b.records) == 2)
+    next_wire = next(key for key in b.records if key != wire)
+    assert b.decide(next_wire, True)
+    wait(lambda: a.records[retry["transferId"]]["data"]["status"] == "completed")

@@ -2,6 +2,8 @@
 
 ## Connect — phần P3 (bước 8–10)
 
+**Điểm chạy hiện hành:** `python -B p3.py demo` mở demo mô phỏng một lệnh; `python -B p3.py check --suite independent`, `--suite ui`, `--suite p1`, `--suite p2` hoặc `--suite all` chạy các suite sẵn có. Dùng Python trong `.venv`. Suite tích hợp được chọn thiếu dependency/revision sai hoặc toàn skip sẽ FAIL; JSON/thời gian/lý do và bằng chứng ở `runtime/p3/checks/<run-ID>/`. Xem [hướng dẫn kiểm thử ngắn](docs/testing.md), [phần báo cáo P3](docs/p3-report.md) và [lịch sử kết quả](docs/test-plan.md).
+
 P3 gồm Web UI HTML/CSS/JavaScript, cầu nối HTTP localhost → TCP P2, điểm nối FileClient P1, module AES-GCM độc lập và kiểm thử. Source được chuyển từ workspace P3 ngày 2026-11-12; bản gốc được giữ nguyên. README cấp repository và đề bài không bị thay thế.
 
 | Thành phần | Trạng thái |
@@ -117,7 +119,7 @@ File browser test dùng control fixture trong tests và **P1 UDP thật**, tách
 # Terminal 1: cổng tự chọn, metadata/ảnh/result chỉ trong runtime/ bị ignore.
 .\.venv\Scripts\python.exe -B -u tests/file_fixture.py --p1-root ../../MMT-P1/A1_Client-Server
 # Terminal 2:
-node tests/browser-file-live.cjs
+node tests/browser-file-live.cjs --config <duong-dan-fixture.json-vua-in> --output runtime/p3/browser
 # Gõ stop rồi Enter trong terminal fixture để dọn và dừng.
 ```
 
