@@ -1,0 +1,19 @@
+# Dependency groups and tooling only; no build backend or distributable package.
+[dependency-groups]
+security = ["cryptography==50.0.2"]
+dev = [
+    { include-group = "security" },
+    "pytest==9.2.0",
+    "ruff==0.17.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-config --strict-markers"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
