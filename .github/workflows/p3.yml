@@ -2,7 +2,10 @@ name: P3 Connect checks
 
 on:
   push:
-    branches: [duc-p3-web-security-integration, p3-web-security-integration]
+    branches:
+      - duc-p3-web-security-integration
+      - p3-web-security-integration
+      - feature/p1-p2-p3-integration
     paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
   pull_request:
     paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
