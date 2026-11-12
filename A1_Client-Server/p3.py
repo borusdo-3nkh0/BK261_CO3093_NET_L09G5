@@ -1,4 +1,4 @@
-"""P3 demo/check CLI. Run from any directory with this checkout's Python."""
+"""P3 Windows demo/check CLI. Run with this checkout's Python 3.14."""
 
 import argparse
 import json
@@ -6,7 +6,6 @@ import math
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -55,24 +54,13 @@ def write_report(path, value):
 
 
 def stop_tree(process):
-    """Only a process/group created by this CLI; never discover unrelated PIDs."""
-    if os.name == "nt":
-        if process.poll() is None:
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                capture_output=True,
-                timeout=10,
-            )
-    else:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-            if process.poll() is None:
-                try:
-                    process.wait(timeout=12)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+    """Only a Windows process tree created here; never discover unrelated PIDs."""
+    if process.poll() is None:
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True,
+            timeout=10,
+        )
     if process.poll() is None:
         process.kill()
     process.wait(timeout=10)
@@ -167,11 +155,6 @@ class Check:
         if remaining <= 0:
             raise TimeoutError("Overall check timeout reached")
         started = time.monotonic()
-        options = (
-            {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-            if os.name == "nt"
-            else {"start_new_session": True}
-        )
         job = WindowsJob()
         try:
             process = subprocess.Popen(
@@ -183,7 +166,7 @@ class Check:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                **options,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             )
         except BaseException:
             job.close()
@@ -199,11 +182,6 @@ class Check:
             try:
                 if process.poll() is None:
                     stop_tree(process)
-                elif os.name == "posix":
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
             finally:
                 job.close()
         (self.output / (name + ".log")).write_text(

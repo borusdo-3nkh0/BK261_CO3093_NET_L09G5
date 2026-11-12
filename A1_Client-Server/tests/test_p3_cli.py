@@ -100,9 +100,6 @@ def test_timeout_kills_owned_child_tree(tmp_path):
         assert probe.connect_ex(("127.0.0.1", port)) != 0
 
 
-@pytest.mark.skipif(
-    os.name != "nt", reason="Windows job-object contract; POSIX uses process groups"
-)
 def test_job_close_kills_descendant_after_parent_exits(tmp_path):
     port_file = tmp_path / "orphan-port.txt"
     child = f"import socket,time,pathlib; s=socket.socket(); s.bind(('127.0.0.1',0)); s.listen(); pathlib.Path({str(port_file)!r}).write_text(str(s.getsockname()[1])); time.sleep(60)"
@@ -175,11 +172,6 @@ def test_timeout_argument_rejects_unbounded_or_invalid_deadline(monkeypatch, tim
 
 
 def test_one_command_demo_uses_own_assets_and_stops(tmp_path):
-    options = (
-        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        if os.name == "nt"
-        else {"start_new_session": True}
-    )
     process = subprocess.Popen(
         [sys.executable, "-B", "-u", str(ROOT / "p3.py"), "demo", "--port", "0"],
         cwd=tmp_path,
@@ -188,7 +180,7 @@ def test_one_command_demo_uses_own_assets_and_stops(tmp_path):
         text=True,
         encoding="utf-8",
         env=dict(os.environ, PYTHONUTF8="1"),
-        **options,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
     )
     lines = queue.Queue()
     threading.Thread(

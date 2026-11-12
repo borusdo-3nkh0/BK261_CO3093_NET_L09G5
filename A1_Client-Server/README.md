@@ -18,7 +18,7 @@ Không dùng tài khoản hoặc dữ liệu nhạy cảm: phiên bản hiện t
 
 ## Cài đặt từ checkout mới
 
-Các lệnh PowerShell bên dưới chạy từ `MMT-P3/A1_Client-Server`, trừ khi ghi khác. Cần Python 3.14 (đã kiểm 3.14.4); Node 24+ và Chrome/Chromium hoặc Edge cho browser test. Không cần Flask/Django/WebSocket, npm install hoặc đóng gói Python package.
+**Môi trường hỗ trợ: Windows, PowerShell, Python 3.14**, Node 24+ và Chrome/Chromium hoặc Edge cho browser test. Các lệnh bên dưới chạy từ `MMT-P3/A1_Client-Server`, trừ khi ghi khác. Không cần Flask/Django/WebSocket, npm install hoặc đóng gói Python package. Workflow P3 chỉ chạy Windows/Python 3.14.
 
 ```powershell
 git clone https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5.git MMT-P3
@@ -30,7 +30,7 @@ py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-`pyproject.toml` khai báo nhóm `security` (cryptography 50.0.2), `dev` (pytest 9.2.0, Ruff 0.17.3 và security). Không cần activate venv. Linux/macOS dùng `python3.14 -m venv .venv` và `.venv/bin/python` thay đường dẫn Windows; chưa nghiệm thu trên hai hệ điều hành này.
+`pyproject.toml` khai báo nhóm `security` (cryptography 50.0.2), `dev` (pytest 9.2.0, Ruff 0.17.3 và security). Không cần activate venv khi dùng trực tiếp `.venv\Scripts\python.exe`.
 
 ## Checkout tham chiếu P1/P2 và cấu hình
 
@@ -127,7 +127,7 @@ node tests/browser-file-live.cjs --config <duong-dan-fixture.json-vua-in> --outp
 
 Fallback online riêng: chạy `tests/p2_online_stub.py --port 5001 --without-online`, bridge khác `--port 8767 --p2-port 5001`, rồi `node tests/browser-p2-live.cjs 8767 5001 --online-unsupported --online-only`. Đây là fixture, không phải P2 thật. Runner IT07/IT10 và IT11/IT12 được bàn giao trong tests; không coi kết quả lịch sử là lần chạy lại checkout mới.
 
-Kết quả thực chạy 2026-11-12 tại checkout mới: **98 pytest đạt, không skip; Ruff check/format và pip check đạt; 22 file JS hợp lệ; 4 kiểm tra cấu hình runner đạt**. Browser file/P1 đạt, hash gửi/nhận khớp; UI chính thức 219 kiểm tra mỗi desktop/223 mobile; demo 33 + 37 ở desktop/mobile. P2 thật đạt login, chat chung/riêng, online/offline, giữ nháp và ACK xen kẽ/timeout. Nguồn, lệnh, kết quả và giới hạn ghi ở [docs/test-plan.md](docs/test-plan.md). Lịch sử trước di chuyển được giữ bên dưới các mục hiện hành, không dùng để khẳng định đã chạy Security v2 hoặc file qua P2 thật.
+Kết quả Windows mới nhất 2026-11-12: **117 test Python đạt, không skip**, cùng 35 unittest P1 gốc; Ruff check/format, pip check, JS syntax, 6 test helper Node và 4 assertion cấu hình đạt. CLI all chạy đủ 4 suite; UI chính thức 234 kiểm tra mỗi desktop/238 mobile; demo 33 + 37 ở desktop/mobile. File/P1 khớp hash qua ticket fixture; P2 thật đạt login, chat chung/riêng, online/offline, giữ nháp và ACK xen kẽ/timeout. Nguồn, run ID, lệnh và giới hạn ghi ở [docs/test-plan.md](docs/test-plan.md). Lịch sử không thay kết quả hiện hành hoặc chứng minh đã chạy Security v2/file qua P2 thật.
 
 ## Source và dữ liệu được bàn giao
 

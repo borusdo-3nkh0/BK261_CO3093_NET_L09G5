@@ -47,7 +47,7 @@ async function main() {
     await pollB(() => report.bFileState === "ready");
   }
   profile = await fs.mkdtemp(path.join(review, "chrome-profile-"));
-  browser = spawn(chromeExecutable(), ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--no-first-run", "--no-default-browser-check", "about:blank"], { windowsHide: true, detached: process.platform !== "win32", stdio: "ignore" });
+  browser = spawn(chromeExecutable(), ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--no-first-run", "--no-default-browser-check", "about:blank"], { windowsHide: true, stdio: "ignore" });
   browser.on("error", error => { browserError = error; });
   let port;
   for (let n = 0; n < 100; n++) { if (browserError) throw browserError; if (browser.exitCode !== null) throw new Error("Chrome exited before ready"); try { port = (await fs.readFile(path.join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]; break; } catch {} await sleep(100); }
@@ -149,7 +149,7 @@ async function main() {
   console.log(JSON.stringify({ result: "PASS", outgoing: report.outgoing, incoming: report.incoming, regression: report.regression.map(r => ({ viewport: r.viewport, counts: r.results.map(x=>x.passed) })) }));
 }
 const interrupted = new Promise((_, reject) => {
-  for (const name of ["SIGINT", "SIGTERM"]) process.once(name, () => reject(new Error("Runner interrupted")));
+  process.once("SIGINT", () => reject(new Error("Runner interrupted")));
 });
 Promise.race([main(), interrupted, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Overall browser timeout")), Number(options.timeout) * 1000); })]).catch(async error => {
   process.exitCode = 1; report.status = "FAIL"; report.error = error.message;

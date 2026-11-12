@@ -1,16 +1,22 @@
 # Kế hoạch kiểm thử P3
 
-Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Từ lượt nâng cấp CLI/CI, dùng `python -B p3.py check --suite ...`; output theo UUID, không còn dùng đường dẫn evidence cố định theo ngày trong các lệnh lịch sử bên dưới. Source/revision và kết quả CI phải đọc từ report/run thực tế; Security v2 vẫn draft.
+Môi trường được hỗ trợ: **Windows/Python 3.14**. Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Dùng `python -B p3.py check --suite ...`; output theo UUID, không dùng đường dẫn evidence cố định theo ngày trong các lệnh lịch sử bên dưới. Source/revision và kết quả CI phải đọc từ report/run thực tế; Security v2 vẫn draft.
+
+## Thu gọn về Windows — 2026-11-12
+
+Đã bỏ matrix ngoài Windows, process-group fallback, đường dẫn browser/Python ngoài Windows và handler SIGTERM bổ sung. Giữ taskkill/Ctrl+C, Windows Job Object, CLI check/demo, report/redaction, timeout, fixture và toàn bộ assertion nghiệp vụ; test Job Object luôn chạy. Không sửa source P1/P2, bridge/adapter/security hoặc thay đổi CSS header và các sửa chờ cleanup đã nghiệm thu.
+
+Lệnh thực chạy: `.venv/Scripts/python.exe -B p3.py check --suite all --timeout 600` trên Windows/Python 3.14.4. Run **check-c888fc493815499a8b544e35c67f152e**: PASS 4 suite trong 137,911s; **117 test Python không skip**, 35 unittest P1 gốc; UI 234 mỗi desktop/238 mobile, demo 33+37; Node helper, JS syntax, Ruff và audit 6 JSON đạt. `pip check`, `ruff format --check .` và `git diff --check` đạt. Cổng 5000/8766 đang dùng không bị dừng. CI hiện hành chỉ có job Windows Python 3.14; kết quả theo run của commit trên fork, không dùng kết quả cũ thay cho lượt chạy mới.
 
 ## CLI, runner và CI P3 — 2026-11-12
 
-Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.FaultRelay, docs/validation.md và workflow p1.yml. P3 tận dụng CLI demo/check, process riêng và SHA ghim, không sao chép thuật toán mạng hoặc sửa source P1/P2. Bridge/adapter/security giữ nguyên; CSS header được sửa sau khi CI phát hiện tràn tên dài trên Linux như mô tả bên dưới.
+Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.FaultRelay, docs/validation.md và workflow p1.yml. P3 tận dụng CLI demo/check, process riêng và SHA ghim, không sao chép thuật toán mạng hoặc sửa source P1/P2. Bridge/adapter/security giữ nguyên. Giữ CSS header tự nở tối thiểu 64px để tên dài và mô tả trạng thái không tràn; test kiểm cả top/bottom. Giữ test chờ worker cleanup rồi mới kiểm quota/staging.
 
 | Kiểm tra thực chạy trên Windows/Python 3.14.4 | Kết quả |
 | --- | --- |
 | CLI tổng hợp `check --suite all --timeout 600`, run check-6050520723644b7dadcac8d821b329d8 | PASS 4 suite, 134,452s; 109 Python độc lập + 5 P1 + 1 P2, không skip; đây là trước khi thêm một test từ chối source dirty |
 | Lượt cuối có Windows Job Object, check-ac19f7a916754b56b47f157982b9609c | PASS 4 suite; 111 Python độc lập + 5 P1 + 1 P2 = **117**, không skip trên Windows; job-close có test process cha đã thoát nhưng process con vẫn bị dọn |
-| Supervisor tham gia job trước khi chạy venv shim, check-d9f9343f470f49f9a33be391a064f6db | Independent PASS 17,863s, gồm 17 test CLI/lifecycle; lỗi/timeout/cleanup và JS đạt. Linux dùng process group; test chỉ dành Windows được skip rõ trên Linux |
+| Supervisor tham gia job trước khi chạy venv shim, check-d9f9343f470f49f9a33be391a064f6db | Independent PASS 17,863s, gồm 17 test CLI/lifecycle; lỗi/timeout/cleanup và JS đạt |
 | Lượt independent/UI mới check-969afb1ca665420491f9a61e8ab21ef0 | PASS; 110 Python độc lập, Ruff/JS và UI/demo; P1/P2 SKIP đúng lý do Not selected |
 | pytest đầy đủ trước test dirty cuối | 115 passed/29,17s; test dirty bổ sung được chạy qua independent ở dòng trên |
 | UI suite | 234 kiểm tra mỗi 1440×900/1366×768/1100×750, 238 ở 390×844; gồm 15 online checks trước chỉ chạy trong runner P2 |
@@ -24,9 +30,9 @@ Tham khảo P1 b085721: p1/__main__.py, tests/test_cli.py, test_udp_transfer.Fau
 
 Lượt check-41302a50adde4bdd97f51be3627d6bc7 có P2-browser FAIL: chờ nhãn Đã gửi có thể khớp tin cũ, rồi nối nháp vào composer chưa được giải phóng. Đã sửa **test** chờ đúng message-body của tin vừa gửi và input rỗng; giữ nguyên assertion nháp và production. Lượt p2 riêng check-fa8a635ffab747b8bb3b51299f102628 đạt 77,38s; lượt all sau đó đạt. Không che thất bại hoặc sửa logic nghiệp vụ để pass.
 
-CI đầu [43175928158](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43175928158), commit 1095c0f: Windows PASS; Ubuntu FAIL. Artifact Ubuntu cho thấy test correlation kiểm quota trước khi worker dọn xong và font Linux làm tên/mô tả offline tràn header 64px ở 390×844. Sửa test chờ active=None trước assertion cleanup, giữ toàn bộ assertion quota/file; sửa CSS dùng min-height 64px và height auto để hiện đủ nội dung. Test demo kiểm cả top/bottom trong header, không giảm coverage hoặc ẩn trạng thái. Kết quả lỗi và ảnh gốc được giữ trong artifact CI, bản tải local ở runtime/p3/ci-43175928158/.
+Ghi chú lịch sử: đã thử Ubuntu ở CI [43175928158](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43175928158) và [43176850648](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43176850648); Ubuntu chưa đạt, Windows đạt ở cả hai. Đã dừng thử nghiệm ngoài Windows và loại các nhánh/cấu hình riêng; đây không phải hạng mục còn phải triển khai. Các sửa cleanup/header hữu ích trên Windows được giữ.
 
-CI tiếp theo chỉ đánh dấu đạt khi có run/conclusion thực tế. WSL AlmaLinux trên máy chưa có Python 3.14/Node/Chrome, không dùng để khẳng định Linux đạt. LAN, file lớn, FILE_SESSION P2 thật và Security v2 chưa nghiệm thu. Xem checklist [testing.md](testing.md) và phần báo cáo [p3-report.md](p3-report.md).
+LAN, file lớn, FILE_SESSION P2 thật và Security v2 chưa nghiệm thu. Xem checklist [testing.md](testing.md) và phần báo cáo [p3-report.md](p3-report.md).
 
 ## Bàn giao vào MMT-P3/A1_Client-Server — 2026-11-12
 

@@ -5,29 +5,21 @@ const net = require("node:net");
 const { execFile } = require("node:child_process");
 
 function chromeExecutable() {
-  const candidates = process.env.CHROME_BIN ? [process.env.CHROME_BIN] : process.platform === "win32" ? [
+  const candidates = process.env.CHROME_BIN ? [process.env.CHROME_BIN] : [
     path.join(process.env.ProgramFiles || "C:/Program Files", "Google/Chrome/Application/chrome.exe"),
     path.join(process.env.LOCALAPPDATA || "", "Google/Chrome/Application/chrome.exe"),
     path.join(process.env.ProgramFiles || "C:/Program Files", "Microsoft/Edge/Application/msedge.exe"),
-  ] : process.platform === "darwin" ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"] : [
-    "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser",
   ];
   const executable = candidates.find(candidate => fs.existsSync(candidate));
   if (!executable) throw new Error("Set CHROME_BIN to an installed Chrome/Chromium executable.");
   return executable;
 }
 
-const pythonExecutable = () => process.env.CONNECT_PYTHON || path.resolve(
-  process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python"
-);
+const pythonExecutable = () => process.env.CONNECT_PYTHON || path.resolve(".venv/Scripts/python.exe");
 
 async function stopProcess(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
-  if (process.platform === "win32") {
-    await new Promise(resolve => execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 10000 }, resolve));
-  } else {
-    try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
-  }
+  await new Promise(resolve => execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 10000 }, resolve));
   if (child.exitCode === null) {
     child.kill("SIGKILL");
     await new Promise(resolve => { const timer = setTimeout(resolve, 3000); child.once("exit", () => { clearTimeout(timer); resolve(); }); });

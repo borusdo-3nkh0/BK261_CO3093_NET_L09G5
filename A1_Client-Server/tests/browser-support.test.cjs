@@ -10,7 +10,7 @@ try {
   process.env.CONNECT_PYTHON = process.execPath;
   assert.equal(pythonExecutable(), process.execPath);
   delete process.env.CONNECT_PYTHON;
-  assert.match(pythonExecutable(), /[\\/]\.venv[\\/](Scripts[\\/]python\.exe|bin[\\/]python)$/);
+  assert.match(pythonExecutable(), /[\\/]\.venv[\\/]Scripts[\\/]python\.exe$/);
   console.log("PASS: browser/Python overrides, missing-browser error and local venv default (4 checks).");
 } finally {
   for (const [key, value] of Object.entries(before)) {
@@ -64,7 +64,7 @@ test("report redacts nested ticket/key/token/password and error text", () => {
 });
 
 test("owned process cleanup waits for termination", async () => {
-  const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { detached: process.platform !== "win32", windowsHide: true, stdio: "ignore" });
+  const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { windowsHide: true, stdio: "ignore" });
   await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
   await stopProcess(child);
   assert.ok(child.exitCode !== null || child.signalCode !== null);

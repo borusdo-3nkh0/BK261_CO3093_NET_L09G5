@@ -116,7 +116,7 @@ async function main() {
   browser = spawn(chromeExecutable(), [
     "--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile,
     "--no-first-run", "--no-default-browser-check", "about:blank",
-  ], { windowsHide: true, detached: process.platform !== "win32", stdio: "ignore" });
+  ], { windowsHide: true, stdio: "ignore" });
   browser.on("error", error => { browserError = error; });
   let port;
   for (let n = 0; n < 100; n++) {
@@ -360,7 +360,7 @@ async function main() {
   await new Promise(resolve => relay.listen(0, "127.0.0.1", resolve));
   const spare = net.createServer(); await new Promise(resolve => spare.listen(0, "127.0.0.1", resolve));
   const relayHttpPort = spare.address().port; await new Promise(resolve => spare.close(resolve));
-  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "bridge.py", "--port", String(relayHttpPort), "--p2-port", String(relay.address().port)], { windowsHide: true, detached: process.platform !== "win32", stdio: "ignore" });
+  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "bridge.py", "--port", String(relayHttpPort), "--p2-port", String(relay.address().port)], { windowsHide: true, stdio: "ignore" });
   relayBridge.on("error", error => { bridgeError = error; });
   for (let n = 0; n < 100; n++) { if (bridgeError) throw bridgeError; try { if ((await fetch(`http://127.0.0.1:${relayHttpPort}/`, { signal: AbortSignal.timeout(1000) })).ok) break; } catch {} await sleep(100); }
   const relayB = new Peer(); await relayB.handshake();
@@ -449,7 +449,7 @@ async function main() {
   await cdp("Browser.close");
 }
 const interrupted = new Promise((_, reject) => {
-  for (const name of ["SIGINT", "SIGTERM"]) process.once(name, () => reject(new Error("Runner interrupted")));
+  process.once("SIGINT", () => reject(new Error("Runner interrupted")));
 });
 Promise.race([main(), interrupted]).catch(async error => {
   console.error(error); process.exitCode = 1;

@@ -1,6 +1,6 @@
 # Kiểm thử P3 hiện hành
 
-Chạy từ `A1_Client-Server`, Python 3.14 và Node 24+. Cài `python -m pip install --group dev` trong venv; dùng executable venv thay `python` nếu chưa activate. `CHROME_BIN` tùy chọn chỉ Chrome/Chromium/Edge; CI dùng Chrome có sẵn trên runner. Không dùng credentials thật.
+Môi trường được hỗ trợ: **Windows, PowerShell, Python 3.14 và Node 24+**. Chạy từ `A1_Client-Server`. Cài `python -m pip install --group dev` trong venv; dùng `.venv\Scripts\python.exe` thay `python` nếu chưa activate. `CHROME_BIN` tùy chọn chỉ Chrome/Chromium/Edge trên Windows; CI dùng Chrome có sẵn trên runner. Không dùng credentials thật.
 
 ## Điểm chạy tổng hợp
 
@@ -23,7 +23,7 @@ python -B p3.py check --suite all --timeout 600
 
 Suite không chọn: SKIP, lý do Not selected. Suite chọn thiếu dependency/revision sai: FAIL và exit 1. Tích hợp thu toàn skip/không có testcase cũng FAIL. Chỉ PASS khi các bước được chọn hoàn tất; không gộp demo vào kết quả IT hệ thống. Lỗi tham số CLI exit 2. Timeout tổng mặc định 600 giây cho các bước, cộng thời gian dọn hữu hạn; chỉ dừng process/nhóm process và server do lượt chạy tạo, không đụng server 5000/8766 đang dùng.
 
-Windows dùng Job Object kill-on-close, supervisor gia nhập job trước khi chạy venv shim; đóng job dọn cả process con còn sống sau khi process cha thoát. Linux dùng nhóm process riêng, cho Node xử lý SIGTERM để dọn Chrome rồi cưỡng chế nếu quá hạn. Test hợp đồng Windows được skip có lý do trên Linux; các ca P1/P2 bắt buộc vẫn phải thực chạy.
+Windows dùng Job Object kill-on-close, supervisor gia nhập job trước khi chạy venv shim; đóng job dọn cả process con còn sống sau khi process cha thoát. Runner dùng taskkill cho cây process do mình tạo và giữ xử lý Ctrl+C. Test hợp đồng Windows luôn được chạy; các ca P1/P2 bắt buộc vẫn phải thực chạy.
 
 Mỗi lượt có `runtime/p3/checks/check-<UUID>/report.json`, status/thời gian/lý do và nguồn/revision, log đã lọc, JUnit XML, report browser riêng và ảnh lỗi khi CDP còn hoạt động. `--output` đổi thư mục gốc, không ghi đè lượt cũ. Không upload profile Chrome, file đầu vào/tải về, packet dump, môi trường hoặc ticket; runner xóa profile/file mẫu sau chạy. Kiểm tra canary xác nhận redaction token/ticket/key/password; audit JSON chạy trước báo PASS. Đây không phải công cụ dò mọi loại bí mật tùy ý: chỉ chạy với account/payload thử công khai.
 
@@ -67,6 +67,6 @@ P3 tự chạy fixture và browser khi chọn suite p1; không cần hai termina
 
 ## CI và lịch sử
 
-`.github/workflows/p3.yml` chạy Windows/Ubuntu, Python 3.14, Node 24, checkout riêng đúng hai SHA P1/P2, không dùng secret CI hoặc server có sẵn. Artifact chỉ nhận JSON công khai, log/JUnit đã lọc và ảnh; timeout job 15 phút. Kết quả CI chỉ có giá trị khi run thực sự hoàn tất, không chỉ vì có workflow.
+`.github/workflows/p3.yml` chỉ chạy **windows-latest, Python 3.14, Node 24**, checkout riêng đúng hai SHA P1/P2, không dùng secret CI hoặc server có sẵn. Artifact chỉ nhận JSON công khai, log/JUnit đã lọc và ảnh; timeout job 15 phút. Kết quả CI chỉ có giá trị khi run thực sự hoàn tất, không chỉ vì có workflow.
 
 Lịch sử/IT/Mxx và kết quả từng lượt: [test-plan.md](test-plan.md). Nội dung đóng góp báo cáo: [p3-report.md](p3-report.md). Security: [draft v2](security-v2-draft.md), chưa triển khai trong lượt này.

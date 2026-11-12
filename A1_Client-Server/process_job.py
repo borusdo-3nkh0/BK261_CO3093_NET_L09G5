@@ -11,9 +11,8 @@ from ctypes import wintypes
 class WindowsJob:
     def __init__(self):
         self.handle = None
-        self.name = None
         if os.name != "nt":
-            return
+            raise OSError("P3 process supervision requires Windows")
 
         class Basic(ctypes.Structure):
             _fields_ = [
@@ -81,8 +80,6 @@ class WindowsJob:
             raise ctypes.WinError(ctypes.get_last_error())
 
     def command(self, command):
-        if not self.name:
-            return command
         return [sys._base_executable, "-B", __file__, self.name, *map(str, command)]
 
     def close(self):
