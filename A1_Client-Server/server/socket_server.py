@@ -10,6 +10,7 @@ from server.auth_protocol_adapter import AuthProtocolAdapter
 from server.session_manager import SessionManager
 from server.message_router import MessageRouter
 from server.request_dispatcher import RequestDispatcher
+from p1.relay import FileRelay
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ class SocketServer:
     max_clients=20,
     handshake_timeout=5.0,
     idle_timeout=60.0,
+    udp_host="127.0.0.1",
+    udp_port=5001,
 ):
         self.host = host
         self.port = port
@@ -100,6 +103,13 @@ class SocketServer:
         self.client_handler = ClientHandler(self.auth_manager)
         self.session_manager = SessionManager()
         self.message_router = MessageRouter()
+        # P1 UDP file transfer relay.
+        # The UDP socket will be opened when start() is called.
+        self.file_relay = FileRelay(
+            host=udp_host,
+            port=udp_port,
+            max_sessions=max_clients,
+        )
 
         # Multi-client components
         self.client_threads = []
@@ -108,6 +118,7 @@ class SocketServer:
         # Synchronization
         self.clients_lock = threading.Lock()
         self.stop_event = threading.Event()
+        self.shutdown_complete = threading.Event()
 
     def process_auth_data(self, data: bytes) -> bytes:
         """Process an authentication request."""
@@ -150,6 +161,7 @@ class SocketServer:
         """Handle handshake, authentication, and request classification."""
 
         active_username = None
+        file_ticket = None
 
         try:
             with client_socket:
@@ -237,8 +249,65 @@ class SocketServer:
                             AuthProtocolAdapter.encode_response("INVALID_REQUEST")
                         )
                         continue
+                    # Handle heartbeat requests.
+                    if request_type == "SYSTEM":
 
-                    
+                        if request["action"] == "PING":
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response("PONG")
+                            )
+                            continue
+                    # Handle UDP file transfer session requests.
+                    if request_type == "FILE":
+
+                        # FILE_SESSION requires successful TCP login.
+                        if active_username is None:
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                AuthProtocolAdapter.encode_response("AUTH_REQUIRED")
+                            )
+                            continue
+
+                        if request["action"] == "FILE_SESSION":
+
+                            # Reuse the existing ticket for this TCP session.
+                            if file_ticket is None:
+                                try:
+                                    file_ticket = self.file_relay.register_session(
+                                        active_username
+                                    )
+
+                                except (ValueError, RuntimeError) as exc:
+                                    logger.warning(
+                                        "Failed to register UDP file session for %s: %s",
+                                        active_username,
+                                        type(exc).__name__
+                                    )
+
+                                    self.send_response(
+                                        client_socket,
+                                        active_username,
+                                        AuthProtocolAdapter.encode_response(
+                                            "FILE_SESSION_FAILED"
+                                        )
+                                    )
+                                    continue
+
+                            response = {
+                                "status": "FILE_SESSION_READY",
+                                "ticket": file_ticket.to_dict(),
+                                "udp_port": self.file_relay.address[1],
+                            }
+
+                            self.send_response(
+                                client_socket,
+                                active_username,
+                                (json.dumps(response) + "\n").encode("utf-8")
+                            )
+                            continue
                     # Handle authenticated user requests.
                     if request_type == "USER":
 
@@ -439,8 +508,22 @@ class SocketServer:
         finally:
             # STEP 5: SESSION AND ROUTER CLEANUP
             if active_username is not None:
-                # Unregister before removing the session, so the same
-                # username cannot be routed to a disconnected socket.
+
+                # Revoke UDP ticket when TCP connection ends.
+                if file_ticket is not None:
+                    try:
+                        self.file_relay.unregister_session(active_username)
+                        logger.info(
+                            "UDP file session revoked for %s",
+                            active_username
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to revoke UDP file session for %s",
+                            active_username
+                        )
+
+                # Remove TCP routing and authentication session.
                 self.message_router.unregister_client(active_username)
                 removed = self.session_manager.remove_session(active_username)
 
@@ -477,6 +560,14 @@ class SocketServer:
 
                 server_socket.bind((self.host, self.port))
                 server_socket.listen(5)
+
+                # Start UDP relay after TCP socket is ready.
+                self.file_relay.start()
+
+                logger.info(
+                    "UDP FileRelay listening on %s:%s",
+                    *self.file_relay.address,
+                )
 
                 # Periodically check for shutdown.
                 server_socket.settimeout(1.0)
@@ -560,7 +651,39 @@ class SocketServer:
                 logger.exception("Socket server error")
 
         finally:
-            self.server_socket = None
+            # Stop accepting new clients and signal shutdown.
+            with self.clients_lock:
+                self.stop_event.set()
+                self.server_socket = None
+
+                client_sockets = list(self.client_sockets)
+                client_threads = list(self.client_threads)
+
+            # Interrupt blocking TCP operations.
+            for client_socket in client_sockets:
+                try:
+                    client_socket.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+
+            # Wait for client cleanup before closing UDP Relay.
+            current_thread = threading.current_thread()
+
+            for client_thread in client_threads:
+                if client_thread is current_thread:
+                    continue
+
+                if client_thread.ident is None:
+                    continue
+
+                client_thread.join()
+
+            # All tracked client threads have finished.
+            try:
+                self.file_relay.close()
+            finally:
+                self.shutdown_complete.set()
+
             logger.info("Server stopped accepting clients")
 
     def stop(self):
@@ -610,4 +733,9 @@ class SocketServer:
                 if thread.is_alive()
             ]
 
-        logger.info("Server shutdown procedure completed")
+        if self.shutdown_complete.wait(timeout=5):
+            logger.info("Server shutdown completed")
+        else:
+            logger.warning(
+                "Server shutdown is still in progress"
+            )

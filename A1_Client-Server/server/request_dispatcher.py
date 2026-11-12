@@ -8,6 +8,8 @@ class RequestDispatcher:
     AUTH_ACTIONS = {"REGISTER", "LOGIN"}
     MESSAGE_ACTIONS = {"UNICAST", "BROADCAST"}
     USER_ACTIONS = {"LIST_ONLINE"}
+    FILE_ACTIONS = {"FILE_SESSION"}
+    SYSTEM_ACTIONS = {"PING"}
 
     @classmethod
     def decode_request(cls, data: bytes) -> dict:
@@ -33,6 +35,8 @@ class RequestDispatcher:
             cls.AUTH_ACTIONS
             | cls.MESSAGE_ACTIONS
             | cls.USER_ACTIONS
+            | cls.FILE_ACTIONS
+            | cls.SYSTEM_ACTIONS
         )
 
         if action not in supported_actions:
@@ -57,5 +61,11 @@ class RequestDispatcher:
 
         if action in cls.USER_ACTIONS:
             return "USER"
+
+        if action in cls.FILE_ACTIONS:
+            return "FILE"
+
+        if action in cls.SYSTEM_ACTIONS:
+            return "SYSTEM"
 
         raise ValueError("Unsupported action")
