@@ -12,10 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from p2_online_stub import OnlineServer  # noqa: E402
-
 from bridge import BridgeServer  # noqa: E402
 from bridge_files import load_p1  # noqa: E402
+from tests.p2_online_stub import OnlineServer  # noqa: E402
 
 
 @contextmanager

@@ -315,8 +315,7 @@ class Check:
                                 env=env,
                             )
                         )
-                sys.path.insert(0, str(ROOT / "tests"))
-                from file_fixture import fixture
+                from tests.file_fixture import fixture
 
                 folder = self.output / name
                 with fixture(
