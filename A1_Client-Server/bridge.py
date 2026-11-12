@@ -217,7 +217,7 @@ class Session:
                 )
                 self.refresh_online()
                 threading.Thread(target=self.receive, daemon=True).start()
-            except OSError, ValueError, TypeError, AttributeError:
+            except (OSError, ValueError, TypeError, AttributeError):
                 self.end(
                     "disconnected",
                     "CONNECT_FAILED",
@@ -500,7 +500,7 @@ class Session:
                         self.packet(json.loads(line))
                 if len(buffer) >= MAX_RESPONSE:
                     raise ValueError("Server frame too large")
-        except OSError, ValueError, TypeError:
+        except (OSError, ValueError, TypeError):
             with self.condition:
                 if self.connected:
                     self.end(
@@ -549,7 +549,7 @@ class Handler(SimpleHTTPRequestHandler):
     def handle(self):
         try:
             super().handle()
-        except ConnectionResetError, BrokenPipeError:
+        except (ConnectionResetError, BrokenPipeError):
             pass  # Closing a tab may reset an idle HTTP connection.
 
     def __init__(self, *args, **kwargs):
@@ -608,7 +608,7 @@ class Handler(SimpleHTTPRequestHandler):
                     self.end_headers()
                     while chunk := stream.read(65536):
                         self.wfile.write(chunk)
-            except ValueError, OSError:
+            except (ValueError, OSError):
                 self.close_connection = True
                 if not self.wfile.closed:
                     # Do not append JSON after a download has started.
@@ -727,7 +727,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.connection.settimeout(TIMEOUT)
             accepted = self.session().file_service().upload(meta, length, self.rfile)
             self.respond({"accepted": accepted})
-        except ValueError, OSError, UnicodeError:
+        except (ValueError, OSError, UnicodeError):
             self.respond(
                 {
                     "error": "Upload bị từ chối: kiểm tra dịch vụ file, tên, dung lượng hoặc hạn mức phiên."

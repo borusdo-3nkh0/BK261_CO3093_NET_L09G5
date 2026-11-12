@@ -61,7 +61,7 @@ class TestConnectionLimit(unittest.TestCase):
         try:
             response = self.handshake(client3)
 
-        except ConnectionResetError, ConnectionAbortedError, BrokenPipeError:
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
             response = b""
 
         self.assertEqual(

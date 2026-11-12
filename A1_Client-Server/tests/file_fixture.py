@@ -101,7 +101,7 @@ def main():
         )
         try:
             input()
-        except KeyboardInterrupt, EOFError:
+        except (KeyboardInterrupt, EOFError):
             pass
 
 

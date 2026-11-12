@@ -41,7 +41,7 @@ class TestFileSessionIntegration(unittest.TestCase):
                         if probe.recv(1024) == b"WELCOME\n":
                             return
 
-                except OSError, RuntimeError:
+                except (OSError, RuntimeError):
                     pass
 
             time.sleep(0.02)

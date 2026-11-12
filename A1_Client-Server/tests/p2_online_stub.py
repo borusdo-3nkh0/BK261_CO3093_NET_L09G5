@@ -63,7 +63,7 @@ class Client(socketserver.StreamRequestHandler):
                     request = json.loads(line)
                     if len(line) > 1024 or not isinstance(request, dict):
                         raise ValueError
-                except ValueError, UnicodeError:
+                except (ValueError, UnicodeError):
                     reply("INVALID_REQUEST")
                     continue
                 action = request.get("action")

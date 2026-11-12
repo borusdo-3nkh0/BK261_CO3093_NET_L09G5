@@ -171,7 +171,7 @@ class FileRelay:
                 self._deliver(outputs)
             except socket.timeout:
                 pass
-            except ProtocolError, UnicodeError:
+            except (ProtocolError, UnicodeError):
                 # Invalid/unauthenticated datagrams get no response or disk allocation.
                 pass
             except OSError:

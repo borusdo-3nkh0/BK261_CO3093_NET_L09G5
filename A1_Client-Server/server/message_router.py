@@ -77,7 +77,7 @@ class MessageRouter:
 
             return True
 
-        except OSError, socket.timeout:
+        except (OSError, socket.timeout):
             return False
 
     def send_unicast(self, sender, recipient, message):
