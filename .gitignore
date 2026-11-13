@@ -1,0 +1,30 @@
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Testing and tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment and secrets
+.env
+.env.*
+
+# Local runtime data
+.local/
+A1_Client-Server/downloads/
+
+# Logs
+*.log
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

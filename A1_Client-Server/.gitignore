@@ -1,0 +1,48 @@
+# Python virtual environments
+.venv/
+venv/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Testing and code checking
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+
+# Runtime data
+/logs/
+*.log
+/runtime/
+/downloads/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+# Additional local secrets
+*.p12
+*.pfx
+*.jks
+id_rsa
+id_ed25519
+
+# Public test logs may be tracked; never put real secrets in fixtures.
+!tests/fixtures/**/
+!tests/fixtures/**/*.log
+
+# Demo source and public samples are included; generated reviews stay local.
+/web/local-demo/review*/
+/web/local-demo/*.patch
