@@ -292,8 +292,7 @@ class TransferTests(unittest.TestCase):
         with self.assertRaisesRegex(TransferError, "retry limit"):
             alice.send_file(self.source(b"x" * 10000), "bob", timeout=3)
         self.wait_until(
-            lambda: not bob._incoming
-            and not list((self.root / "bob").iterdir())
+            lambda: not bob._incoming and not list((self.root / "bob").iterdir())
         )
         self.assertEqual(list((self.root / "bob").iterdir()), [])
 
