@@ -291,7 +291,10 @@ class TransferTests(unittest.TestCase):
         _, alice, bob = self.pair(blackhole=True, client_options={"max_retries": 1})
         with self.assertRaisesRegex(TransferError, "retry limit"):
             alice.send_file(self.source(b"x" * 10000), "bob", timeout=3)
-        self.wait_until(lambda: not bob._incoming)
+        self.wait_until(
+            lambda: not bob._incoming
+            and not list((self.root / "bob").iterdir())
+        )
         self.assertEqual(list((self.root / "bob").iterdir()), [])
 
     def test_whole_file_hash_failure_never_reports_success(self):

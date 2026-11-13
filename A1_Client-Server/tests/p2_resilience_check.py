@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 WAIT = 10
@@ -41,7 +41,7 @@ class Run:
     def log(self, **data):
         self.trace.append(
             {
-                "at": datetime.now(UTC).isoformat(),
+                "at": datetime.now(timezone.utc).isoformat(),
                 "elapsedMs": round((time.monotonic() - self.started) * 1000, 3),
                 "case": self.case,
                 **data,
@@ -335,7 +335,7 @@ def main():
     )
     report = {
         "runId": run.id,
-        "startedAt": datetime.now(UTC).isoformat(),
+        "startedAt": datetime.now(timezone.utc).isoformat(),
         "target": f"127.0.0.1:{args.port}",
         "python": sys.version,
         "runnerSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -376,7 +376,7 @@ def main():
                     )
     finally:
         run.close_all()
-        report["completedAt"] = datetime.now(UTC).isoformat()
+        report["completedAt"] = datetime.now(timezone.utc).isoformat()
         report["trace"] = run.trace
         text = json.dumps(report, ensure_ascii=False, indent=2)
         check(run.password not in text, "Test password must not appear in evidence")

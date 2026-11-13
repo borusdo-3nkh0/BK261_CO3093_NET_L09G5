@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
@@ -303,7 +303,7 @@ class Session:
                 "senderId": self.username,
                 "recipientId": recipient,
                 "text": text,
-                "createdAt": datetime.now(UTC).isoformat(),
+                "createdAt": datetime.now(timezone.utc).isoformat(),
                 "status": "sending",
                 "error": None,
             }
@@ -360,7 +360,7 @@ class Session:
                     "senderId": sender,
                     "recipientId": self.username if private else None,
                     "text": text,
-                    "createdAt": datetime.now(UTC).isoformat(),
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
                     "status": "sent",
                     "error": None,
                 },

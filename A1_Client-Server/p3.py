@@ -11,7 +11,7 @@ import sys
 import time
 import uuid
 import xml.etree.ElementTree as ET
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from process_job import WindowsJob
@@ -125,7 +125,7 @@ class Check:
         self.output.mkdir(parents=True)
         self.report = dict(
             runId=self.output.name,
-            startedAt=datetime.now(UTC).isoformat(),
+            startedAt=datetime.now(timezone.utc).isoformat(),
             python=sys.version,
             platform=sys.platform,
             securityV2="draft; not implemented",

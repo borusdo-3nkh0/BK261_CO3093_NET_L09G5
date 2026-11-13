@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -610,7 +610,7 @@ def main():
 
     report = {
         "runId": run_id,
-        "startedAt": datetime.now(UTC).isoformat(),
+        "startedAt": datetime.now(timezone.utc).isoformat(),
         "commit": git("rev-parse", "HEAD"),
         "branch": git("branch", "--show-current"),
         "p2Status": git("status", "--short"),
@@ -691,7 +691,7 @@ def main():
             "exitCode": process.exitcode,
             "forced": forced,
         }
-        report["completedAt"] = datetime.now(UTC).isoformat()
+        report["completedAt"] = datetime.now(timezone.utc).isoformat()
         content = json.dumps(report, ensure_ascii=False, indent=2)
         require(password not in content, "Credentials must not enter evidence")
         for name in ("results.json", run_id + ".json"):
