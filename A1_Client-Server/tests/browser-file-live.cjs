@@ -19,7 +19,8 @@ async function main() {
   assert.ok(options.config, "--config is required; use tests/file_fixture.py or p3.py check");
   config = JSON.parse(await fs.readFile(path.resolve(options.config), "utf8"));
   assert.ok(Number.isInteger(config.http) && config.http > 0 && config.http < 65536, "Invalid HTTP port");
-  const base = `http://127.0.0.1:${config.http}`;
+  const base = `${config.scheme || "http"}://127.0.0.1:${config.http}`;
+  if(config.backend === "security") report.source = "real P2 TLS + v2 P1 AES-GCM; no ticket fixture";
   const run = "file-" + Date.now(), a = run + "-a", b = run + "-b", password = "public-file-fixture";
   report.config = { backend: config.backend, http: config.http, tcp: config.tcp, udp: config.udp };
   async function api(route, body, token) {
@@ -30,14 +31,16 @@ async function main() {
     return response.json();
   }
   if (options.suite === "files") for (const username of [a, b]) {
-    const peer = new LinePeer(config.tcp); peers.push(peer); await peer.ready;
-    peer.send("HELLO"); assert.equal(await peer.read(), "WELCOME");
+    const peer = new LinePeer(config.tcp, 5000, config.backend === "security"); peers.push(peer); await peer.ready;
+    peer.send(config.backend === "security" ? "HELLO2" : "HELLO");
+    assert.equal(await peer.read(), config.backend === "security" ? "WELCOME2" : "WELCOME");
     peer.send({ action: "REGISTER", username, password });
     assert.equal(JSON.parse(await peer.read()).status, "REGISTER_SUCCESS"); peer.close();
   }
-  let cursor = 0; const bTransfers = new Map();
+  let cursor = 0; const bTransfers = new Map(), bMessages = [];
   const consume = result => { cursor = result.cursor; for (const event of result.events) {
     if (event.type === "transfer.upsert") bTransfers.set(event.data.transferId, event.data);
+    if (event.type === "message.upsert") bMessages.push(event.data);
     if (event.type === "files.changed") report.bFileState = event.data.state;
   } };
   const pollB = async predicate => { const deadline = Date.now() + 30000; while (Date.now() < deadline) { if (predicate()) return; consume(await api(`/api/events?after=${cursor}`, undefined, bToken)); } throw new Error("B event timeout"); };
@@ -47,7 +50,7 @@ async function main() {
     await pollB(() => report.bFileState === "ready");
   }
   profile = await fs.mkdtemp(path.join(review, "chrome-profile-"));
-  browser = spawn(chromeExecutable(), ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--no-first-run", "--no-default-browser-check", "about:blank"], { windowsHide: true, stdio: "ignore" });
+  browser = spawn(chromeExecutable(), ["--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile, "--no-first-run", "--no-default-browser-check", ...(config.spki ? ["--ignore-certificate-errors-spki-list=" + config.spki] : []), "about:blank"], { windowsHide: true, stdio: "ignore" });
   browser.on("error", error => { browserError = error; });
   let port;
   for (let n = 0; n < 100; n++) { if (browserError) throw browserError; if (browser.exitCode !== null) throw new Error("Chrome exited before ready"); try { port = (await fs.readFile(path.join(profile, "DevToolsActivePort"), "utf8")).split("\n")[0]; break; } catch {} await sleep(100); }
@@ -74,7 +77,26 @@ async function main() {
   await until("document.getElementById('connection-state').textContent === 'Đã kết nối'");
   await until(`Array.from(document.querySelectorAll('#users li')).some(n=>n.dataset.userId===${JSON.stringify(b)})`);
   await until("!document.getElementById('file-selection').textContent.includes('Đang chuẩn bị')");
+  if (config.backend === "security") {
+    await until("document.getElementById('security-state')?.textContent.includes('TLS đã xác minh')");
+    await until("document.getElementById('security-state')?.textContent.includes('File AES-GCM')");
+    report.security = { https: true, p2VerifiedTLS: true, headlessCertificatePin: true, aesChatAndFile: true };
+  }
   await click("#new-chat"); await type("user-search", b); await click("#known-users button");
+  if (config.backend === "security") {
+    await type("message-input", "Secure UI private chat"); await click("#send");
+    await pollB(() => bMessages.some(m => m.text === "Secure UI private chat" && m.recipientId === b));
+    await until("Array.from(document.querySelectorAll('.message-status')).some(n=>n.textContent==='Đã gửi')");
+    await api("/api/message", {requestId:crypto.randomUUID(),messageId:crypto.randomUUID(),conversationId:"b-private",recipient:a,text:"Secure peer reply"}, bToken);
+    await until("document.getElementById('messages').textContent.includes('Secure peer reply')");
+    await pollB(() => bMessages.some(m => m.text === "Secure peer reply" && m.status === "sent"));
+    await click('[data-conversation="global"]');
+    await type("message-input", "Secure UI common chat"); await click("#send");
+    await pollB(() => bMessages.some(m => m.text === "Secure UI common chat" && m.recipientId === null));
+    await until("document.getElementById('message-input').value===''");
+    await click('[data-conversation]:not([data-conversation="global"])');
+    report.security.liveChatPrivateAndCommon = true;
+  }
   const fixtures = path.join(review, "inputs"); await fs.mkdir(fixtures, { recursive: true });
   const payload = Buffer.from(Array.from({ length: 65539 }, (_, n) => n % 256));
   const name = "Báo cáo kiểm thử file.bin", sourcePath = path.join(fixtures, name); await fs.writeFile(sourcePath, payload);
@@ -158,7 +180,7 @@ Promise.race([main(), interrupted, new Promise((_, reject) => { timer = setTimeo
   }
 }).finally(async () => {
   clearTimeout(timer); abort.abort();
-  if (bToken && config) await fetch(`http://127.0.0.1:${config.http}/api/disconnect`, { method: "POST", signal: AbortSignal.timeout(3000), headers: { "Content-Type": "application/json", "X-Connect-Session": bToken }, body: "{}" }).catch(()=>{});
+  if (bToken && config) await fetch(`${config.scheme || "http"}://127.0.0.1:${config.http}/api/disconnect`, { method: "POST", signal: AbortSignal.timeout(3000), headers: { "Content-Type": "application/json", "X-Connect-Session": bToken }, body: "{}" }).catch(()=>{});
   for (const peer of peers) peer.close();
   ws?.close(); await stopProcess(browser);
   for (const call of pending.values()) { clearTimeout(call.timer); call.reject(new Error("Runner cleanup")); } pending.clear();

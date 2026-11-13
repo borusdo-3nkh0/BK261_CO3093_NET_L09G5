@@ -1,5 +1,8 @@
+import argparse
 import logging
+from pathlib import Path
 
+from security.tls import server_context
 from server.socket_server import SocketServer
 
 logging.basicConfig(
@@ -19,7 +22,20 @@ def main():
     logger.info("P2 - Server Core")
     logger.info("===================================")
 
-    server = SocketServer(host="127.0.0.1", port=5000)
+    parser = argparse.ArgumentParser(
+        description="Connect TLS/AES-GCM server (no plaintext fallback)"
+    )
+    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--udp-port", type=int, default=5001)
+    parser.add_argument("--cert", type=Path, default=Path("runtime/tls/server.pem"))
+    parser.add_argument("--key", type=Path, default=Path("runtime/tls/server.key"))
+    args = parser.parse_args()
+    server = SocketServer(
+        host="127.0.0.1",
+        port=args.port,
+        udp_port=args.udp_port,
+        tls_context=server_context(args.cert, args.key),
+    )
 
     server.start()
 

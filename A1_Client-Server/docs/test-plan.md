@@ -1,6 +1,40 @@
 # Kế hoạch kiểm thử P3
 
-Môi trường được hỗ trợ: **Windows/Python 3.14**. Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Dùng `python -B p3.py check --suite ...`; output theo UUID, không dùng đường dẫn evidence cố định theo ngày trong các lệnh lịch sử bên dưới. Source/revision và kết quả CI phải đọc từ report/run thực tế; Security v2 vẫn draft.
+Môi trường được hỗ trợ: **Windows/Python 3.14**. Hướng dẫn hiện hành: [testing.md](testing.md), [README](../README.md), [protocol](protocol.md). Kết quả security hiện hành ở mốc đầu dưới đây; các mục có ngày trước đó là lịch sử, không thay cho nghiệm thu nhánh mới.
+
+## Bước 8 — TLS và AES-GCM thật, 2026-11-13
+
+Source: worktree `MMT-P3-security`, nhánh `feature/p3-security`, baseline upstream/main **5249f106554a3300fae4798c39ada7bfdf70e0b3** cùng thay đổi chưa commit của lượt này. P1/P2/P3 đều nạp từ **cùng checkout**, có assertion module root; không lấy backend tham chiếu cũ để nghiệm thu mã hóa. Windows, Python 3.14.4, Node 24.21, Chrome 157; port TCP/UDP/HTTPS do OS cấp, chỉ dừng tài nguyên của lượt kiểm thử. Security tối thiểu đã triển khai; phần còn lại của draft cũ không tự trở thành yêu cầu.
+
+Lệnh chạy lại từ `A1_Client-Server`:
+
+```powershell
+.\.venv\Scripts\python.exe -B p3.py check --suite security --timeout 180
+.\.venv\Scripts\python.exe -B -m pytest tests -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+```
+
+| Ca / bằng chứng thực chạy | Kết quả |
+| --- | --- |
+| Suite security cuối, `check-a237e455f8854659833b2dc74a5e6338` | **PASS 23 test Python, 0 skip**, 41,273s; HTTPS/browser 9,696s; suite tổng 50,986s; audit 2 JSON PASS |
+| Chat riêng/chung hai chiều, online/offline, phiên và FILE_SESSION do P2 thật cấp | **Đạt**. Nội dung gửi là envelope AES-GCM; P2 giải mã/định tuyến/mã hóa theo context người nhận. Khóa/ticket không xuất hiện trong response browser |
+| File hai chiều, Chấp nhận/Từ chối, rỗng, tên Unicode/trùng tên, tải đúng phiên | **Đạt** với P1/relay thật, payload binary 65.792 byte trong Python và 65.539 byte trong browser. Download SHA-256 plaintext khớp; file chưa hoàn tất hoặc phiên khác bị chặn |
+| Sai khóa/tag/AAD chat | **Đạt**: SECURITY_FAILED, không định tuyến, đóng/thu hồi context và ticket; LOGIN lại dùng UUID/khóa mới, packet phiên cũ bị bỏ |
+| UDP trên đường truyền thật: làm sai tag/AAD dù HMAC hợp lệ, mất ACK/COMPLETE, trùng/đảo DATA và replay | **Đạt**: 305 frame đã mã hóa, 3 packet tamper/replay bị từ chối; nonce không trùng trong mỗi chiều/context; retry hoàn tất, chỉ một file được công bố và hash khớp; datagram không quá 1.084 byte, không chứa marker plaintext |
+| Certificate sai CA/sai hostname; HELLO v1 trong TLS; TCP plaintext | **Đạt**: từ chối, không fallback. Bridge báo TLS_VERIFY_FAILED khi CA sai. Python xác minh CA/hostname thật; browser headless ghim đúng SPKI cert thử trong profile tạm, không sửa trust store Windows |
+| Giới hạn chat sau mã hóa | **Đạt**: 4.000 ký tự qua frame lớn hơn v1; client tự tạo envelope hợp lệ 4.001 ký tự bị P2 từ chối, client nhận vẫn kết nối |
+| Browser UI/demo hồi quy trong suite security | **Đạt**: 234 assertion mỗi 1440×900/1366×768/1100×750, 238 ở 390×844; demo 33+37 ở desktop/mobile. Login/chat riêng/chung, file hai chiều/tiến trình/hash và nhãn TLS/AES được kiểm với backend thật; demo vẫn mô phỏng riêng |
+| pytest toàn bộ main, `runtime/security/regression/check-4e044a0da2b6438cabdbc521e4c19a55` | **304 passed**, 58 subtest, 6 legacy deselected, 136,516s. Chạy trước khi thêm ca giới hạn chat cuối; ca mới sau đó đạt riêng và nằm trong 23 test security ở trên. Không tuyên bố đã chạy lại toàn bộ thành 305 |
+| Backend tham chiếu v1, chạy process riêng | P1 và independent/UI đạt ở `check-d90472dc7a76426bb2565abbc4df0986`; P2 **PASS 77,640s** ở `check-a75032d410344aadbfa82a2ed2e39dae`. Đây là hồi quy v1, không phải chứng cứ TLS/AES |
+| Dependency, Ruff và format | `pip check`, `ruff check .`, `ruff format --check .` đạt. Không thêm dependency |
+| Windows CI nhánh security | Chưa chạy tại thời điểm ghi kết quả local; xem run gắn SHA commit thực tế trên fork sau push, không dùng CI nhánh review thay thế |
+
+Lượt tổng hợp đầu `check-d90472dc7a76426bb2565abbc4df0986` có hai lỗi: fixture ACK v1 còn gọi CLI bridge nay yêu cầu HTTPS; test plaintext bị timeout do socket TLS lỗi chưa được đóng trước khi vào request loop. Đã tách bootstrap HTTP v1 trong **test**, giữ CLI production bắt buộc bảo mật; đóng socket ở `finally` cho cả TLS handshake lỗi. Các ca bị ảnh hưởng đã đạt trong lượt P2/security tiếp theo. Không che các lượt lỗi trước.
+
+Bằng chứng local: `runtime/p3/checks/<runId>/report.json`, `security.xml`, log và `security/browser/browser-3582bde6-5e09-4670-ba8c-327c44010ad0/report.json`. Report ghi revision, source dirty lúc chạy, thời gian và module root; JUnit ghi số frame/tamper/hash, không ghi khóa/ticket. Profile browser, chứng thư/private key và file thử được dọn theo fixture; runtime không đưa vào commit.
+
+Giới hạn: thử localhost Windows, server/relay được tin cậy, **không E2EE**. Không chạy lại LAN, tải 10/20 client hoặc file lớn trong lượt security. Ca **256 MiB vẫn giữ kết quả FAIL do timeout 300 giây** của nhánh review; không sửa pacing/thuật toán/timeout hoặc diễn giải ca đó là đạt. UI và ACK/COMPLETE giữ quy tắc chưa xác định kết quả khi thiếu xác nhận. Python thu hồi context về mặt logic, không cam kết xóa vật lý mọi bản sao khóa trong RAM.
 
 ## Thu gọn về Windows — 2026-11-12
 

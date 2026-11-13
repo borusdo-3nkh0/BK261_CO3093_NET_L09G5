@@ -22,13 +22,14 @@ REFERENCES = {
     "p2": "fbf53eb35583ea9eabd9639acaf59fbab4675567",
 }
 SENSITIVE = re.compile(
-    r"^(?:token|ticket|password|key|keys|secret|authorization|x-connect-session)$", re.I
+    r"^(?:token|ticket|password|key|keys|c2s|s2c|secret|authorization|x-connect-session)$",
+    re.I,
 )
 
 
 def public_text(value):
     value = re.sub(
-        r"(\b(?:token|ticket|password|key|authorization)\b[\s\"\x27]*[:=]\s*)(?:\"[^\"]*\"|\x27[^\x27]*\x27|[^\s,}]+)",
+        r"(\b(?:token|ticket|password|key|c2s|s2c|authorization)\b[\s\"\x27]*[:=]\s*)(?:\"[^\"]*\"|\x27[^\x27]*\x27|[^\s,}]+)",
         r"\1[REDACTED]",
         value,
         flags=re.I,
@@ -128,7 +129,7 @@ class Check:
             startedAt=datetime.now(timezone.utc).isoformat(),
             python=sys.version,
             platform=sys.platform,
-            securityV2="draft; not implemented",
+            securityV2="TLS + AES-GCM hop-by-hop; implemented",
             sources={},
             suites=[],
         )
@@ -216,7 +217,45 @@ class Check:
             CONNECT_REQUIRE_INTEGRATION="1",
         )
         try:
-            if name == "independent":
+            if name == "security":
+                self.report["sources"]["security"] = dict(
+                    self.report["sources"]["p3"],
+                    mode="same checkout P1/P2/P3; HTTPS/TLS + AES-GCM; real tickets",
+                )
+                junit = self.output / "security.xml"
+                result["steps"].append(
+                    self.step(
+                        "security-python",
+                        [
+                            sys.executable,
+                            "-B",
+                            "-m",
+                            "pytest",
+                            "-q",
+                            "tests/test_security_context.py",
+                            "tests/test_security_live.py",
+                            f"--junitxml={junit}",
+                        ],
+                        env=env,
+                        junit=junit,
+                        required=True,
+                    )
+                )
+                result["steps"].append(
+                    self.step(
+                        "security-browser",
+                        [
+                            sys.executable,
+                            "-B",
+                            "tests/file_fixture.py",
+                            "--security-browser",
+                            "--output",
+                            str(self.output / "security"),
+                        ],
+                        env=env,
+                    )
+                )
+            elif name == "independent":
                 junit = self.output / "independent.xml"
                 result["steps"].append(
                     self.step(
@@ -227,8 +266,10 @@ class Check:
                             "-m",
                             "pytest",
                             "-q",
-                            "--ignore=tests/test_p1_files.py",
-                            "--ignore=tests/test_p2_file_dependency.py",
+                            "tests/test_bridge.py",
+                            "tests/test_file_bridge.py",
+                            "tests/test_payload.py",
+                            "tests/test_p3_cli.py",
                             f"--junitxml={junit}",
                         ],
                         env=env,
@@ -265,6 +306,7 @@ class Check:
                 result["steps"].append(dict(name="js-syntax", status="PASS"))
             else:
                 if name in REFERENCES:
+                    env["CONNECT_REFERENCE_SUITE"] = name
                     self.report["sources"][name] = reference(
                         name, getattr(self.args, name + "_root")
                     )
@@ -355,11 +397,11 @@ class Check:
 
     def run(self):
         selected = (
-            {"independent", "ui", "p1", "p2"}
+            {"independent", "ui", "p1", "p2", "security"}
             if "all" in self.args.suite
             else set(self.args.suite)
         )
-        for name in ("independent", "ui", "p1", "p2"):
+        for name in ("independent", "ui", "p1", "p2", "security"):
             if name in selected and not self.cancelled:
                 self.suite(name)
             else:
@@ -417,7 +459,7 @@ def main():
     check.add_argument(
         "--suite",
         nargs="+",
-        choices=["independent", "ui", "p1", "p2", "all"],
+        choices=["independent", "ui", "p1", "p2", "security", "all"],
         default=["independent"],
     )
     check.add_argument("--output", type=Path, default=ROOT / "runtime/p3/checks")

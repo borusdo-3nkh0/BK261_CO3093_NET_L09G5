@@ -1,5 +1,7 @@
 # Kiểm thử P3 hiện hành
 
+> Nhánh security: chạy `python -B p3.py check --suite security --timeout 180` để kiểm P2/relay cùng checkout, TLS/HTTPS và AES-GCM thật. Test chứng thư tự sinh/port 0; không cần backend tham chiếu cũ. `pytest tests` loại hai file legacy, dùng process riêng qua suite p1/p2 nếu cần. README/protocol và mốc security đầu test-plan là trạng thái hiện hành; hướng dẫn v1 bên dưới chỉ dùng cho hồi quy. Không chạy lại ca 256 MiB trong lượt security.
+
 Môi trường được hỗ trợ: **Windows, PowerShell, Python 3.14 và Node 24+**. Chạy từ `A1_Client-Server`. Cài `python -m pip install --group dev` trong venv; dùng `.venv\Scripts\python.exe` thay `python` nếu chưa activate. `CHROME_BIN` tùy chọn chỉ Chrome/Chromium/Edge trên Windows; CI dùng Chrome có sẵn trên runner. Không dùng credentials thật.
 
 ## Điểm chạy tổng hợp
@@ -20,6 +22,7 @@ python -B p3.py check --suite all --timeout 600
 | ui | UI chính thức + demo qua HTTP localhost, 4 viewport | Không backend thật; test adapter trong tests, demo trong local-demo; cần browser |
 | p1 | pytest bridge với P1 UDP, 35 unittest P1 gốc, browser gửi/nhận file thật | Auth và FILE_SESSION là **fixture**; không gọi đây là P2 thật |
 | p2 | pytest dependency FILE_SESSION, server SocketServer P2 thật, Web/TCP login/chat/online | P2 ghim chưa hỗ trợ file; bộ ACK relay chỉ là thiết bị thử |
+| security | 23 test context/TLS/chat/file và browser HTTPS với P1/P2/P3 cùng checkout | Khóa/ticket do P2 thật cấp; cert tạm, CA/hostname được xác minh; không cần checkout tham chiếu |
 
 Suite không chọn: SKIP, lý do Not selected. Suite chọn thiếu dependency/revision sai: FAIL và exit 1. Tích hợp thu toàn skip/không có testcase cũng FAIL. Chỉ PASS khi các bước được chọn hoàn tất; không gộp demo vào kết quả IT hệ thống. Lỗi tham số CLI exit 2. Timeout tổng mặc định 600 giây cho các bước, cộng thời gian dọn hữu hạn; chỉ dừng process/nhóm process và server do lượt chạy tạo, không đụng server 5000/8766 đang dùng.
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 
 CHUNK_SIZE = 1024
+SECURE_CHUNK_SIZE = 996
 MAX_FILE_SIZE = 256 * 1024 * 1024
 MAX_CONTROL_LINE = 1024
 MAX_RESPONSE_LINE = 8192
@@ -128,9 +129,13 @@ def peek_session_id(data):
     ):
         raise ProtocolError("Invalid datagram size")
     magic, version, _, session, _, _, length = HEADER.unpack_from(data)
-    if magic != MAGIC or version != VERSION:
+    if magic != MAGIC or version not in {VERSION, 2}:
         raise ProtocolError("Unsupported protocol")
-    if length > CHUNK_SIZE or len(data) != HEADER.size + length + TAG_SIZE:
+    if (
+        length > CHUNK_SIZE
+        or (version == 2 and length < 28)
+        or len(data) != HEADER.size + length + TAG_SIZE
+    ):
         raise ProtocolError("Invalid datagram length")
     return uuid.UUID(bytes=session)
 
@@ -138,6 +143,8 @@ def peek_session_id(data):
 def decode_packet(data, key):
     _validate_key(key)
     peek_session_id(data)
+    if data[4] != VERSION:
+        raise ProtocolError("Secure packet requires a v2 context")
     body, tag = data[:-TAG_SIZE], data[-TAG_SIZE:]
     if not hmac.compare_digest(tag, hmac.digest(key, body, "sha256")[:TAG_SIZE]):
         raise ProtocolError("Invalid authentication tag")
@@ -237,8 +244,14 @@ class FileOffer:
     size: int
     sha256: str
     sender: str = ""
+    chunk_size: int = CHUNK_SIZE
 
     def __post_init__(self):
+        if type(self.chunk_size) is not int or self.chunk_size not in {
+            CHUNK_SIZE,
+            SECURE_CHUNK_SIZE,
+        }:
+            raise ProtocolError("Unsupported chunk size")
         validate_username(self.recipient)
         validate_filename(self.filename)
         if not isinstance(self.sender, str):
@@ -254,12 +267,12 @@ class FileOffer:
 
     @property
     def total_chunks(self):
-        return (self.size + CHUNK_SIZE - 1) // CHUNK_SIZE
+        return (self.size + self.chunk_size - 1) // self.chunk_size
 
     def chunk_length(self, sequence):
         if not 0 <= sequence < self.total_chunks:
             raise ProtocolError("Chunk sequence out of range")
-        return min(CHUNK_SIZE, self.size - sequence * CHUNK_SIZE)
+        return min(self.chunk_size, self.size - sequence * self.chunk_size)
 
     def to_bytes(self):
         fields = dict(
@@ -267,7 +280,7 @@ class FileOffer:
             filename=self.filename,
             size=self.size,
             sha256=self.sha256,
-            chunk_size=CHUNK_SIZE,
+            chunk_size=self.chunk_size,
             total_chunks=self.total_chunks,
         )
         if self.sender:
@@ -287,12 +300,13 @@ class FileOffer:
                 value["size"],
                 value["sha256"],
                 value.get("sender", "") if sender is None else sender,
+                value["chunk_size"],
             )
         except (KeyError, TypeError, UnicodeError) as exc:
             raise ProtocolError("Invalid file metadata") from exc
         if (
             type(value.get("chunk_size")) is not int
-            or value["chunk_size"] != CHUNK_SIZE
+            or value["chunk_size"] != offer.chunk_size
             or type(value.get("total_chunks")) is not int
             or value["total_chunks"] != offer.total_chunks
         ):
@@ -305,18 +319,31 @@ class SessionTicket:
     username: str
     session_id: uuid.UUID
     key: bytes = field(repr=False)
+    version: int = 1
+    c2s: bytes = field(default=b"", repr=False)
+    s2c: bytes = field(default=b"", repr=False)
 
     def __post_init__(self):
         validate_username(self.username)
         _validate_key(self.key)
+        if self.version not in {1, 2}:
+            raise ProtocolError("Unsupported ticket version")
+        if self.version == 2:
+            _validate_key(self.c2s)
+            _validate_key(self.s2c)
+            if len({self.key, self.c2s, self.s2c}) != 3:
+                raise ProtocolError("HMAC and AES keys must be independent")
         if not isinstance(self.session_id, uuid.UUID) or self.session_id == ZERO_ID:
             raise ProtocolError("Invalid session ID")
 
     def to_dict(self):
         """Private credentials: return only to the authenticated owner."""
-        return dict(
+        value = dict(
             username=self.username, session_id=str(self.session_id), key=self.key.hex()
         )
+        if self.version == 2:
+            value.update(version=2, c2s=self.c2s.hex(), s2c=self.s2c.hex())
+        return value
 
     @classmethod
     def from_dict(cls, value):
@@ -325,6 +352,9 @@ class SessionTicket:
                 value["username"],
                 uuid.UUID(value["session_id"]),
                 bytes.fromhex(value["key"]),
+                value.get("version", 1),
+                bytes.fromhex(value.get("c2s", "")),
+                bytes.fromhex(value.get("s2c", "")),
             )
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ProtocolError("Invalid session ticket") from exc

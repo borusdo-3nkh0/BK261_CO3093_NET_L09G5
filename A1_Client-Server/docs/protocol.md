@@ -1,4 +1,42 @@
-# P1 Protocol design and reliable UDP file transfer
+# Connect security v2 — implementation hiện hành
+
+Phiên bản tối thiểu cho bước 8, Windows/localhost. Server/relay được tin cậy, có plaintext; không E2EE. Phần v1 phía dưới giữ cho fixture/hồi quy, không phải protocol của entry point dùng thật.
+
+## Bootstrap và khóa
+
+Browser → bridge dùng HTTPS; bridge → P2 dùng TLS 1.2 trở lên, xác minh CA và SAN localhost/127.0.0.1. Thiếu/sai chứng thư không fallback HTTP/TCP plaintext. Sau TLS: `HELLO2\n` → `WELCOME2\n`; v1 HELLO bị từ chối. REGISTER/LOGIN JSON giữ action cũ, chỉ nằm trong TLS.
+
+LOGIN_SUCCESS qua TLS chứa `security: {version:2, session_id:UUID, c2s:hex32bytes, s2c:hex32bytes}`. P2 tạo mới mỗi phiên, gửi đáp ứng trước khi công bố route online; router giữ context Python. Không trả phần security này ra browser. FILE_SESSION cấp ticket v2 `{username,session_id,key,version:2,c2s,s2c}` và udp_port. `key` là HMAC riêng; hai khóa AES file khác hai khóa chat. FILE_SESSION lặp cùng phiên giữ ticket hiện tại, không reset counter. Disconnect thu hồi route/context và ticket relay; LOGIN mới cấp khóa/UUID mới. Không lưu khóa/ticket ra file.
+
+## Chat
+
+JSON action/type/sender/recipient giữ luồng cũ. Trường message trên TLS là `{v:2,sid:UUID,data:base64(nonce12 || ciphertext || tag16)}`. Plaintext UTF-8 text tối đa 4.000 ký tự tại UI; frame TCP secure tối đa **32.768 byte gồm LF**. REGISTER/control/ACK còn là JSON bên trong TLS. P2 giải mã trước định tuyến, mã hóa bằng khóa s2c riêng từng người nhận, kể cả broadcast.
+
+AAD chung: `b"Connect-v2/" + purposeASCII + b"/" + sessionUUIDbytes + direction`, direction là `b"/c2s/"` hoặc `b"/s2c/"`. Chat nối thêm JSON UTF-8 compact `[kind,sender,recipient]`, recipient null cho BROADCAST. Sai khóa/tag/AAD trả SECURITY_FAILED rồi đóng phiên, không định tuyến/log nội dung. ACK thành công vẫn là UNICAST_SUCCESS/BROADCAST_SUCCESS; thiếu ACK vẫn unknown, không tự retry chat.
+
+## UDP file
+
+Header giữ `!4sBB16s16sIH` (44 byte), magic P1FT, **version=2**, length là số byte payload đã mã hóa. Body: `header44 || nonce12 || ciphertext(0..996) || GCMtag16 || HMAC16`. HMAC tính trên header + nonce/ciphertext/tag bằng ticket.key; GCM AAD là prefix purpose `file`/UUID/chiều ở trên, nối toàn bộ header44.
+
+| Packet | Plaintext tối đa | Datagram tối đa |
+| --- | --- | --- |
+| DATA | 996 byte | 1.084 byte |
+| OFFER | 996 byte; chunk_size=996 | 1.084 byte |
+| BIND/BOUND/ACCEPT/ACK/FIN/COMPLETE/PING/PONG | 0 | 88 byte |
+| CHALLENGE/PROVE | đúng 16 byte | 104 byte |
+| ERROR/REJECT/CANCEL | 256 byte | 344 byte |
+
+Ticket có trước BIND → CHALLENGE → PROVE → BOUND. Bootstrap cũng được AES-GCM/HMAC bảo vệ; challenge hiện có 16 byte, gắn endpoint, hạn 5 giây. Relay giải mã trước kiểm tra/định tuyến, rồi mã hóa lại bằng khóa peer đích. Codec v2 từ chối v1 dù biết HMAC key; không đoán version hoặc tự fallback.
+
+Mỗi chiều/context giữ counter nonce 96 bit có lock, bắt đầu 0; không reset/copy context/khóa. Mỗi LOGIN cấp khóa mới. Replay window bitmap 4.096 counter chỉ cập nhật sau GCM thành công; mất/đảo packet trong cửa sổ được nhận, cùng nonce hoặc quá cũ bị bỏ. Retry P1 giữ ID/sequence, encode lại lấy nonce mới. Cache transfer/receipt/COMPLETE, selective ACK, RTO, pacing và giới hạn file giữ nguyên.
+
+DATA chỉ ghi sau giải mã. Size/hash là plaintext; receiver kiểm size/SHA-256, lưu/rename thành công rồi mới gửi COMPLETE v2. Sender chỉ completed sau COMPLETE đúng context/transfer đã xác thực. Mất xác nhận/connection → chưa xác định kết quả. AES không chứng minh người dùng đã đọc tin.
+
+API tham khảo: [Python ssl](https://docs.python.org/3.14/library/ssl.html), [cryptography X.509](https://cryptography.io/en/stable/x509/tutorial/). Không tuyên bố hardening public hoặc mọi mục của draft cũ.
+
+---
+
+# P1 v1 — legacy test contract
 
 P1 owns assignment steps 1 and 6. This specification is written before the P1
 implementation. The branch starts at `main` and does not import P2 commits.

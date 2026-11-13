@@ -1,5 +1,7 @@
 # Yêu cầu P3 — bước 8–10
 
+> Mốc 2026-11-13: bước 8 đã nối trên nhánh feature/p3-security với TLS và AES-GCM chat/file thật; [protocol](protocol.md), [README](../README.md) và test-plan là trạng thái hiện hành. Checklist cũ dưới đây giữ theo thời điểm chuẩn bị nền. Đề yêu cầu mã hóa payload bằng thư viện chuẩn; TLS/khóa chiều/AAD/counter/replay là lựa chọn triển khai tối thiểu cho phương án từng chặng được giao, không phải nguyên văn mọi yêu cầu đề.
+
 > Cập nhật bàn giao 2026-11-12: source hiện ở MMT-P3/A1_Client-Server; các mục có ngày cũ bên dưới là lịch sử. Từ lượt này, demo source trong web/local-demo/ được commit theo yêu cầu mới; review/runtime/bí mật vẫn bị loại. Hướng dẫn chạy hiện hành ở ../README.md; Security v2 ở security-v2-draft.md là draft chưa triển khai.
 
 ## Căn cứ và giới hạn
@@ -8,7 +10,7 @@
 
 ## Yêu cầu theo thông tin đề đã được cung cấp
 
-- [ ] Bước 8 — Security: mã hóa payload bằng thư viện mật mã tiêu chuẩn trước khi gửi và giải mã khi nhận. P3-04 đã có module độc lập; mã hóa trên luồng mạng thật còn chờ tích hợp.
+- [x] Bước 8 — Security: mã hóa payload bằng thư viện mật mã tiêu chuẩn trước khi gửi và giải mã khi nhận. Đã nối AES-GCM chat/file và TLS trên nhánh security; nghiệm thu localhost Windows tại mốc 2026-11-13 của [test-plan](test-plan.md). Không bao gồm mọi ý tưởng trong draft Security v2.
 - [ ] Bước 9 — HTTP UI với client-side JavaScript: hoàn thành giao diện và kết nối sau khi thống nhất với P1/P2.
 - [ ] Bước 10 — Testing & Code Quality: code định dạng sạch, có chú thích phù hợp và qua kiểm thử mô phỏng mạng cục bộ từ nhiều terminal. Test module độc lập chưa thay thế yêu cầu kiểm thử mạng.
 

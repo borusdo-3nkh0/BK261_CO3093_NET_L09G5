@@ -1,5 +1,7 @@
 # Integration Guide — P1, P2 and P3
 
+> Security hiện hành (feature/p3-security, 2026-11-13): các entry point P2/bridge bắt buộc TLS/HTTPS có chứng thư, LOGIN cấp context chat; FILE_SESSION cấp ticket v2/AES file, relay và client dùng codec v2. Xem README/protocol và bằng chứng test-plan. Legacy constructors/checkout chỉ dùng fixture hồi quy, không fallback trên endpoint thật. Các ghi chép cũ về security chỉ độc lập/draft bên dưới là lịch sử.
+
 ## Current integration status — 2026-11-12
 
 This document combines the P1/P2 integration contract and

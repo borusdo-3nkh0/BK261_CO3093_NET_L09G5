@@ -287,6 +287,13 @@ export async function mountUI({ adapter = null, mode = "live", conversations = [
     if ($("user-picker").open) renderPicker();
     const connected = state.connection.state === "connected";
     $("connection-state").textContent = connectionLabels[state.connection.state];
+    if (!simulation) {
+      let security = $("security-state");
+      if (!security) { security = node("span", "", "hint"); security.id = "security-state"; document.querySelector(".identity").append(security); }
+      security.textContent = connected && state.connection.security === "tls-aesgcm"
+        ? `TLS đã xác minh · Chat AES-GCM${state.fileService?.state === "ready" ? " · File AES-GCM" : ""}`
+        : connected ? "Kết nối kiểm thử chưa xác minh bảo mật" : "Chưa xác minh bảo mật";
+    }
     $("self-name").textContent = connected ? nameOf(selfId()) : "Chưa đăng nhập";
     document.querySelector(".self-avatar").textContent = connected ? initials(nameOf(selfId())) : "C";
     $("disconnect").disabled = !connected;
