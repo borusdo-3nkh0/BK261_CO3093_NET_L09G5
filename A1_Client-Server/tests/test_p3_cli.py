@@ -163,6 +163,30 @@ def test_reference_dirty_tracked_source_is_not_accepted(tmp_path, monkeypatch):
         reference("p1", tmp_path)
 
 
+def test_all_selects_current_checkout_without_legacy_or_large(tmp_path, monkeypatch):
+    config = args(tmp_path)
+    config.suite = ["all"]
+    check = Check(config)
+    selected = []
+
+    def record(name):
+        selected.append(name)
+        check.report["suites"].append(dict(name=name, status="PASS"))
+
+    monkeypatch.setattr(check, "suite", record)
+    assert check.run() == 0
+    assert selected == ["independent", "ui", "integrated", "security"]
+
+
+def test_check_defaults_to_current_suites(monkeypatch):
+    selected = []
+    monkeypatch.setattr(sys, "argv", ["p3.py", "check"])
+    monkeypatch.setattr(
+        Check, "run", lambda self: selected.extend(self.args.suite) or 0
+    )
+    assert main() == 0 and selected == ["all"]
+
+
 @pytest.mark.parametrize("timeout", ["inf", "nan", "0", "-1"])
 def test_timeout_argument_rejects_unbounded_or_invalid_deadline(monkeypatch, timeout):
     monkeypatch.setattr(sys, "argv", ["p3.py", "check", "--timeout", timeout])

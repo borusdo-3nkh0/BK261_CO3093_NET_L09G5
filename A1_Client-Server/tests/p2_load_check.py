@@ -1,13 +1,16 @@
 """IT12/IT11 against one owned P2 process; no changes to the P2 checkout."""
 
+import argparse
 import ctypes
 import hashlib
+import inspect
 import json
 import logging
 import multiprocessing as mp
 import os
 import platform
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -19,10 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 OUTPUT = ROOT / "runtime/reviews/it11-it12-2026-11-08"
-P2 = Path(
-    os.environ.get("CONNECT_P2_ROOT", ROOT.parent.parent / "MMT-P2/A1_Client-Server")
-).resolve()
+P2 = Path(os.environ.get("CONNECT_P2_ROOT", ROOT)).resolve()
 WAIT = 10
 QUIET = 10
 
@@ -79,7 +81,19 @@ def serve(pipe, source, log_file):
         format="%(asctime)s %(levelname)s %(message)s",
         encoding="utf-8",
     )
-    server = SocketServer(host="127.0.0.1", port=0)
+    options = (
+        {"udp_port": 0}
+        if "udp_port" in inspect.signature(SocketServer).parameters
+        else {}
+    )
+    if os.environ.get("CONNECT_TEST_CA"):
+        from security.tls import server_context
+
+        certs = Path(os.environ["CONNECT_TEST_CA"]).parent
+        options["tls_context"] = server_context(
+            certs / "server.pem", certs / "server.key"
+        )
+    server = SocketServer(host="127.0.0.1", port=0, **options)
     thread = threading.Thread(target=server.start)
     thread.start()
     try:
@@ -97,6 +111,9 @@ def serve(pipe, source, log_file):
             {
                 "pid": os.getpid(),
                 "port": sock.getsockname()[1],
+                "udpPort": server.file_relay.address[1]
+                if hasattr(server, "file_relay")
+                else None,
                 "sourceFile": str(
                     Path(sys.modules[SocketServer.__module__].__file__).resolve()
                 ),
@@ -141,10 +158,18 @@ def serve(pipe, source, log_file):
 class Wire:
     def __init__(self, port, timeout):
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+        self.crypto, self.username = None, None
+        ca = os.environ.get("CONNECT_TEST_CA")
+        if ca:
+            from security.tls import client_context
+
+            self.sock = client_context(ca).wrap_socket(
+                self.sock, server_hostname="127.0.0.1"
+            )
         self.sock.settimeout(timeout)
         self.buffer = b""
         self.local_port = self.sock.getsockname()[1]
-        self.sock.sendall(b"HELLO\n")
+        self.sock.sendall(b"HELLO2\n" if ca else b"HELLO\n")
         require(self.read() == "WELCOME", "Missing WELCOME")
 
     def read(self):
@@ -155,18 +180,42 @@ class Wire:
             self.buffer += data
             require(len(self.buffer) < 131072, "Unexpected response size")
         line, self.buffer = self.buffer.split(b"\n", 1)
-        return "WELCOME" if line == b"WELCOME" else json.loads(line)
+        if line in {b"WELCOME", b"WELCOME2"}:
+            return "WELCOME"
+        packet = json.loads(line)
+        if packet.get("type") in {"BROADCAST", "UNICAST"} and self.crypto:
+            from security.context import chat_aad
+
+            packet["message"] = self.crypto.decrypt_text(
+                packet["message"],
+                chat_aad(packet["type"], packet["sender"], packet.get("recipient")),
+            )
+        return packet
 
     def send(self, packet):
+        if packet.get("action") in {"BROADCAST", "UNICAST"} and self.crypto:
+            from security.context import chat_aad
+
+            packet = dict(
+                packet,
+                message=self.crypto.encrypt_text(
+                    packet["message"],
+                    chat_aad(packet["action"], self.username, packet.get("recipient")),
+                ),
+            )
         self.sock.sendall((json.dumps(packet, ensure_ascii=False) + "\n").encode())
 
     def auth(self, action, username, password):
         self.send({"action": action, "username": username, "password": password})
         response = self.read()
         require(
-            response == {"status": action + "_SUCCESS"},
+            response.get("status") == action + "_SUCCESS",
             f"{action} did not succeed: {response.get('status')}",
         )
+        if action == "LOGIN" and os.environ.get("CONNECT_TEST_CA"):
+            from security.context import Context
+
+            self.crypto, self.username = Context(response["security"]), username
 
 
 def client(pipe, gate, port, username, password, timeout):
@@ -175,9 +224,11 @@ def client(pipe, gate, port, username, password, timeout):
     closing = threading.Event()
     lock = threading.Lock()
     records, acks, errors, sends, endpoints = [], [], [], [], []
+    online = []
     phase = "login"
 
     def receive():
+        nonlocal online
         try:
             while not closing.is_set():
                 packet = wire.read()
@@ -190,6 +241,8 @@ def client(pipe, gate, port, username, password, timeout):
                                 "receivedAtNs": time.monotonic_ns(),
                             }
                         )
+                    elif packet.get("status") == "LIST_ONLINE_SUCCESS":
+                        online = packet["users"]
                     elif packet.get("status") == "BROADCAST_SUCCESS":
                         acks.append({"phase": phase, "atNs": time.monotonic_ns()})
                     else:
@@ -249,6 +302,12 @@ def client(pipe, gate, port, username, password, timeout):
             op = command["op"]
             if op == "stats":
                 pipe.send(snapshot())
+            elif op == "online":
+                wire.send({"action": "LIST_ONLINE"})
+                deadline = time.monotonic() + timeout
+                while not online and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                pipe.send({"users": list(online)})
             elif op == "arm":
                 phase = command["phase"]
                 pipe.send({"armed": phase})
@@ -333,7 +392,9 @@ def it12(pipe, port, prefix, password):
                     "client": label,
                     "pid": os.getpid(),
                     "port": wire.local_port,
-                    "handshake": "WELCOME",
+                    "handshake": "WELCOME2/TLS"
+                    if os.environ.get("CONNECT_TEST_CA")
+                    else "WELCOME",
                 }
             )
             wire.auth("REGISTER", name, password)
@@ -541,6 +602,11 @@ def it11(ctx, monitor, port, prefix, password, number):
             result["partialStats"] = exchange(pipes, {"op": "stats"}, WAIT)
             return result
         result["registryReady"] = wait_registry(monitor, names)
+        result["onlineSnapshots"] = exchange(pipes, {"op": "online"}, timeout)
+        require(
+            all(set(row["users"]) == set(names) for row in result["onlineSnapshots"]),
+            "LIST_ONLINE mismatch",
+        )
         stable, stats = workload(
             pipes, gate, names, 5, prefix + f"/N{number}/stable", timeout, monitor
         )
@@ -601,7 +667,21 @@ def it11(ctx, monitor, port, prefix, password, number):
 
 
 def main():
+    global P2, OUTPUT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=P2)
+    parser.add_argument("--output", type=Path, default=ROOT / "runtime/p3/load")
+    args = parser.parse_args()
+    P2 = args.source.resolve(strict=True)
+    OUTPUT = args.output.resolve() / ("load-" + uuid.uuid4().hex)
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    certs = OUTPUT / "tls"
+    os.environ.pop("CONNECT_TEST_CA", None)
+    if P2 == ROOT:
+        from security.tls import create_certificates
+
+        create_certificates(certs)
+        os.environ["CONNECT_TEST_CA"] = str(certs / "ca.pem")
     ctx = mp.get_context("spawn")
     run_id = "load-" + uuid.uuid4().hex[:12]
 
@@ -618,7 +698,9 @@ def main():
         "platform": platform.platform(),
         "logicalCPUs": os.cpu_count(),
         "runnerSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        "p2ReferenceSHA256": {
+        "security": "TLS/AES-GCM" if P2 == ROOT else "legacy reference",
+        "sourceKind": "configured checkout; not automatically a legacy reference",
+        "p2SourceSHA256": {
             str(p.relative_to(P2)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in (P2 / "server").glob("*.py")
         },
@@ -640,9 +722,11 @@ def main():
         print("IT12: " + report["cases"]["IT12"]["verdict"], flush=True)
         report["cases"]["IT11"] = []
         for count in (10, 20):
+            case_started = time.monotonic()
             result = it11(
                 ctx, parent, report["server"]["port"], run_id, password, count
             )
+            result["elapsedSeconds"] = round(time.monotonic() - case_started, 3)
             report["cases"]["IT11"].append(result)
             print(
                 json.dumps(
@@ -691,6 +775,9 @@ def main():
             "exitCode": process.exitcode,
             "forced": forced,
         }
+        if certs.exists():
+            assert certs.parent == OUTPUT
+            shutil.rmtree(certs)
         report["completedAt"] = datetime.now(timezone.utc).isoformat()
         content = json.dumps(report, ensure_ascii=False, indent=2)
         require(password not in content, "Credentials must not enter evidence")

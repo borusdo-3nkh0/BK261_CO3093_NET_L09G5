@@ -4,7 +4,7 @@ P1 cung cấp truyền file UDP tin cậy; P2 quản lý đăng nhập/phiên v�
 
 ## Cài đặt và chứng thư thử
 
-Chạy từ `A1_Client-Server` của nhánh `feature/p3-security`:
+Chạy từ `A1_Client-Server` của nhánh `handoff/p3-integrated-security-20261114`:
 
 ```powershell
 py -3.14 -m venv .venv
@@ -79,7 +79,9 @@ Chi tiết byte/AAD: [protocol.md](docs/protocol.md). Draft cũ giữ làm lịc
 .\.venv\Scripts\python.exe -B p3.py demo
 ```
 
-Suite security tự tạo chứng thư/services port 0, dùng P2/relay thật; kiểm sai key/tag/AAD, nonce/replay/retry, certificate, reconnect và HTTPS/browser. Không cần checkout tham chiếu cũ. `p3.py check --suite all` còn chạy nhóm v1 ghim P1 b085721/P2 fbf53eb riêng; legacy không thay nghiệm thu security. Test/profile/payload và khóa thử được dọn; bằng chứng công khai ở runtime, không commit. Kết quả thực chạy ở [test-plan.md](docs/test-plan.md).
+Một lệnh kiểm tra bàn giao: `.\.venv\Scripts\python.exe -B p3.py check --timeout 600`. Mặc định `all` chạy `independent`, `ui`, `integrated`, `security`; không chọn file lớn hoặc tải nhiều client. Integrated dùng P1/P2/P3 cùng checkout, TLS/HTTPS, ticket v2 P2 thật và hai phiên Chrome; kiểm chat/file hai chiều, DATA/FIN/COMPLETE, hash, cleanup và chat khi file đang truyền. Security kiểm sai key/tag/AAD, nonce/replay/retry, certificate và reconnect. Không cần checkout tham chiếu cũ cho hai suite này.
+
+Nhóm v1 ghim P1 b085721/P2 fbf53eb giữ riêng: `p3.py check --suite p1 p2 --p1-root <P1-app> --p2-root <P2-app> --timeout 300`. Nhóm legacy không thay nghiệm thu tích hợp TLS. Các lệnh opt-in `large`/`load`, dữ liệu mô phỏng, giới hạn và lịch sử kết quả ở [testing.md](docs/testing.md) và [test-plan.md](docs/test-plan.md). Test/profile/payload và khóa thử được dọn; runtime không commit.
 
 Demo vẫn mở HTTP `/local-demo/`, ghi rõ **Chế độ mô phỏng**, không chứa khóa/kết nối server thật. Không dùng demo để tuyên bố mã hóa.
 
