@@ -14,7 +14,9 @@ class MessageRouter:
         self.send_locks = {}
         self.crypto = {}
 
-    def register_client(self, username, client_socket, *, crypto=None, welcome=None):
+    def register_client(
+        self, username, client_socket, *, crypto=None, welcome=None, io_lock=None
+    ):
         """Register an authenticated client."""
 
         if not isinstance(username, str) or not username:
@@ -34,7 +36,9 @@ class MessageRouter:
                     return False
             self.crypto[username] = crypto
             self.clients[username] = client_socket
-            self.send_locks[username] = threading.Lock()
+            self.send_locks[username] = (
+                io_lock if io_lock is not None else threading.Lock()
+            )
             return True
 
     def unregister_client(self, username):

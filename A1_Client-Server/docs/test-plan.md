@@ -1,5 +1,31 @@
 # Kế hoạch kiểm thử P3
 
+## Sửa đọc TLS / WinError 10035 — 2026-11-14
+
+Nhánh `handoff/p3-integrated-security-20261114`, base `e9f7e7916a19cf70edd8cd5ee10d62c07cf39d1a`. Đã đọc lại log run `check-e0f9bd47650f47ddb80b1584c4c53b5c`: 01:42:04,133, C09 bị đóng từ `receive_line` → `SSLSocket.read` sau `BlockingIOError 10035`, trong lúc các survivor broadcast. Điểm sai trong code: receiver và router có thể dùng cùng SSL object đồng thời; `send_locks` trước đó chỉ tuần tự hóa các writer. Không có bằng chứng rằng cần tăng timeout hoặc thay thuật toán truyền file.
+
+[OpenSSL thread safety](https://docs.openssl.org/master/man7/openssl-threads/) yêu cầu không dùng cùng SSL object đồng thời. [CPython 3.14.4 `_ssl.c`](https://github.com/python/cpython/blob/v3.14.4/Modules/_ssl.c) có nhánh chuyển lỗi Winsock từ SSL_ERROR_SYSCALL thành OSError; [Python SSL readiness](https://docs.python.org/3.14/library/ssl.html#notes-on-non-blocking-sockets) mô tả WANT_READ/WANT_WRITE và chờ select. Không kết luận đây là lỗi certificate, AES hoặc định tuyến; lịch thread chính xác của lỗi cũ không được ghi lại.
+
+Bản sửa chỉ ở `server/socket_server.py` và `server/message_router.py`: TLS receiver và writer dùng chung lock hiện có của router. Trong lock, receiver chỉ gọi recv không chặn, phục hồi timeout socket rồi nhả lock; chờ read/write readiness ở ngoài lock. Lock acquisition và select đều dùng **deadline monotonic ban đầu của cả frame**, không khởi động lại timeout sau would-block. Chỉ nhận WSAEWOULDBLOCK/EAGAIN và SSLWantRead/Write như điều kiện chờ; EOF trả None, reset/lỗi TLS nghiêm trọng vẫn propagate để đóng phiên/thu hồi ticket. TCP legacy không đổi; handshake/idle timeout vẫn 5/60 giây, frame limit và thuật toán file không đổi.
+
+Thêm `tests/test_tls_receive.py`, được suite integrated thu tự động. Test lỗi 10035 chèn vào **SSLSocket thật** của P2: trước sửa **FAIL** vì phiên bị đóng (`runtime/receive-before.log`); sau sửa giữ phiên, tin tới đúng một lần. Test hai client thật còn giữ receiver ở giữa thao tác SSL bằng barrier hữu hạn, xác nhận router phải chờ cùng lock; sau nhả barrier, chat vẫn nhận. Các ca riêng kiểm deadline khi chờ lock/partial frame, EOF, reset, BlockingIOError khác và lỗi TLS fatal. Đây là tái hiện đường lỗi có kiểm soát, không tuyên bố đã ép lịch OS tái tạo tự nhiên đúng lần lỗi cũ.
+
+Lệnh nghiệm thu cùng P2/relay thật trong checkout: `python -B p3.py check --suite integrated security load --timeout 480`. Lượt này không chạy file lớn hoặc sửa lỗi 256 MiB. Các kết quả cũ bên dưới được giữ làm lịch sử; CI phải đối chiếu SHA bản sửa thực chạy.
+
+| Kiểm tra Windows/Python 3.14.4 sau sửa | Kết quả thực chạy |
+| --- | --- |
+| Targeted `pytest tests/test_tls_receive.py tests/test_timeout_resilience.py tests/test_message_router.py -q` | **38 passed**, 8 subtest, 4,72s; gồm 7 ca mới, không bỏ assertion cũ |
+| Run `check-63bccc9ad4e04ffaafa563d89818fd34` | **PASS**, tổng 272,093s; audit 6 JSON PASS; source e9f7e79 + tracked changes lúc chạy |
+| Integrated Python + hai Chrome/P2/relay thật | **187 test/58 subtest đạt**, không skip; 3 large/load deselected có chủ ý. Suite 165,681s; browser 40,323s. Chat/file/hash, online/offline/reconnect và ngắt DATA/FIN/COMPLETE giữ nguyên assertion |
+| Security Python + HTTPS/browser | **23 test đạt**, không skip; suite 50,192s. Sai CA/hostname, key/tag/AAD, replay/retry và thu hồi phiên vẫn được kiểm |
+| 10 client TLS/AES | **Đạt**, 22,123s: login 10/10; 50 tin gửi, kỳ vọng/thực nhận **450/450**, ACK 50; 0 thiếu/trùng/sai đích. Sau đóng một nửa: **20/20** lượt nhận; reconnect 5/5, registry/online đúng |
+| 20 client TLS/AES | **Đạt**, 22,859s: login 20/20; 100 tin gửi, kỳ vọng/thực nhận **1.900/1.900**, ACK 100; 0 thiếu/trùng/sai đích. Sau đóng một nửa: **90/90** lượt nhận; reconnect 10/10, registry/online đúng |
+| File/chat 4 client | **Đạt**, 1 test/8,221s; giữ kiểm tra chat đã nhận lúc file còn transferring, size/hash và cleanup |
+| Cleanup/load log | Tất cả 30 worker exit 0, reset socket về 0; server PID 36072 dừng bình thường, không terminate cưỡng bức; **0 WinError 10035, 0 unexpected client socket error** trong log lượt này |
+| Ruff, format, dependency, diff | Đạt; không thêm dependency, không tăng handshake/idle/file timeout |
+
+Bằng chứng local ở `runtime/p3/checks/check-63bccc9ad4e04ffaafa563d89818fd34/`: `integrated.xml`, `security.xml`, `load.xml`, các browser report và `load/load-<UUID>/results.json`/server.log. Dùng tài khoản/payload thử; không commit runtime, private key hoặc ticket. Một lượt load đầy đủ sau sửa đã đạt; không tuyên bố đo tần suất lỗi hoặc benchmark. Windows CI chưa chạy tại thời điểm ghi local, sẽ đối chiếu run gắn SHA bản sửa sau push; mặc định CI chạy integrated/security cùng các ca mới, load opt-in được nghiệm thu local riêng.
+
 ## Gom nhánh bàn giao — 2026-11-14
 
 Nhánh `handoff/p3-integrated-security-20261114` ghép `review/main-integration-20261113` **9b46e9cda0bfc7800a06f2b9c9140e0baf03e979** với `feature/p3-security` **03783e3a4cde0a9c726af0544933194c7301e5a1**. Source production P1/P2/P3 giữ nguyên nhánh Security; chỉ giải quyết runner/workflow/tài liệu và điều chỉnh test cho protocol v2. Các mục ngày trước bên dưới giữ nguyên làm lịch sử, không thay nghiệm thu bản ghép.

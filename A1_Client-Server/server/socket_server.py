@@ -1,6 +1,9 @@
+import errno
 import json
 import logging
+import select
 import socket
+import ssl
 import threading
 import time
 
@@ -16,7 +19,7 @@ from server.session_manager import SessionManager
 logger = logging.getLogger(__name__)
 
 
-def receive_line(client_socket, max_length=1024, timeout=None):
+def receive_line(client_socket, max_length=1024, timeout=None, *, io_lock=None):
     """Receive one newline-terminated TCP message within a deadline."""
 
     if timeout is not None:
@@ -30,6 +33,8 @@ def receive_line(client_socket, max_length=1024, timeout=None):
         deadline = time.monotonic() + timeout
     else:
         deadline = None
+    if io_lock is not None and deadline is None:
+        raise ValueError("Shared TLS reads require a finite timeout")
 
     data = bytearray()
 
@@ -40,9 +45,48 @@ def receive_line(client_socket, max_length=1024, timeout=None):
             if remaining <= 0:
                 raise socket.timeout("Receive deadline exceeded")
 
-            client_socket.settimeout(remaining)
-
-        chunk = client_socket.recv(1)
+        if io_lock is None:
+            if deadline is not None:
+                client_socket.settimeout(remaining)
+            chunk = client_socket.recv(1)
+        else:
+            try:
+                if not io_lock.acquire(timeout=remaining):
+                    raise socket.timeout("Receive deadline exceeded")
+                try:
+                    previous_timeout = client_socket.gettimeout()
+                    try:
+                        # Never hold the shared SSL lock while waiting for input.
+                        client_socket.setblocking(False)
+                        chunk = client_socket.recv(1)
+                    finally:
+                        client_socket.settimeout(previous_timeout)
+                finally:
+                    io_lock.release()
+            except (
+                BlockingIOError,
+                ssl.SSLWantReadError,
+                ssl.SSLWantWriteError,
+            ) as exc:
+                if (
+                    isinstance(exc, BlockingIOError)
+                    and exc.errno not in {errno.EAGAIN, errno.EWOULDBLOCK, 10035}
+                    and getattr(exc, "winerror", None) != 10035
+                ):
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise socket.timeout("Receive deadline exceeded") from exc
+                writing = isinstance(exc, ssl.SSLWantWriteError)
+                ready = select.select(
+                    [] if writing else [client_socket],
+                    [client_socket] if writing else [],
+                    [],
+                    remaining,
+                )
+                if not (ready[0] or ready[1]):
+                    raise socket.timeout("Receive deadline exceeded") from exc
+                continue
 
         if not chunk:
             return None
@@ -157,6 +201,7 @@ class SocketServer:
         active_username = None
         file_ticket = None
         crypto = None
+        io_lock = threading.Lock() if self.tls_context else None
 
         try:
             if self.tls_context:
@@ -176,7 +221,9 @@ class SocketServer:
 
                 # STEP 1: HANDSHAKE
                 try:
-                    data = receive_line(client_socket, timeout=self.handshake_timeout)
+                    data = receive_line(
+                        client_socket, timeout=self.handshake_timeout, io_lock=io_lock
+                    )
 
                 except ValueError:
                     logger.warning("Handshake message too large")
@@ -215,6 +262,7 @@ class SocketServer:
                             client_socket,
                             max_length=32768 if self.tls_context else 1024,
                             timeout=self.idle_timeout,
+                            io_lock=io_lock,
                         )
 
                     except ValueError:
@@ -475,7 +523,11 @@ class SocketServer:
                                             )
                                             + "\n"
                                         ).encode()
-                                        options = dict(crypto=crypto, welcome=welcome)
+                                        options = dict(
+                                            crypto=crypto,
+                                            welcome=welcome,
+                                            io_lock=io_lock,
+                                        )
                                     router_registered = (
                                         self.message_router.register_client(
                                             username, client_socket, **options
