@@ -1,4 +1,4 @@
-"""Check the real P2 reference's FILE_SESSION gap, using an owned port-0 server."""
+"""Legacy fallback only, NOT acceptance of the integrated checkout's P2."""
 
 import json
 import os
@@ -14,13 +14,19 @@ from bridge import Session, read_line
 from tests.test_file_bridge import FakeClient, wait
 
 
-def test_reference_p2_file_session_unavailable_keeps_chat(tmp_path):
+def test_legacy_p2_without_file_session_keeps_chat(tmp_path):
     default = Path(__file__).resolve().parents[2] / "../MMT-P2/A1_Client-Server"
     root = Path(os.environ.get("CONNECT_P2_ROOT", default)).resolve()
     if not (root / "server/socket_server.py").is_file():
         if os.environ.get("CONNECT_REQUIRE_INTEGRATION") == "1":
             pytest.fail("Required P2 checkout is missing; set CONNECT_P2_ROOT")
         pytest.skip("Real P2 reference checkout is not available")
+    commit = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    assert commit == "fbf53eb35583ea9eabd9639acaf59fbab4675567", (
+        "Legacy fallback requires P2 fbf53eb; use test_integrated_p3.py for main"
+    )
     bootstrap = """
 import json, sys, threading, time
 sys.path.insert(0, sys.argv[1])
@@ -85,7 +91,7 @@ thread.join()
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
         ).strip()
         evidence = dict(
-            source="real P2 reference",
+            source="legacy P2 fallback fbf53eb; NOT current main acceptance",
             commit=commit,
             pid=process.pid,
             port=port,
@@ -95,7 +101,7 @@ thread.join()
             broadcastAck="BROADCAST_SUCCESS",
             fileBytesTransferred=0,
         )
-        review = Path("runtime/reviews/files-2026-11-11")
+        review = Path("runtime/p3/legacy-fallback") / ("run-" + uuid.uuid4().hex)
         review.mkdir(parents=True, exist_ok=True)
         (review / "real-p2-dependency.json").write_text(
             json.dumps(evidence, indent=2), encoding="utf-8"

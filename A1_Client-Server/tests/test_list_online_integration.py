@@ -12,6 +12,7 @@ class TestListOnlineIntegration(unittest.TestCase):
         self.server = SocketServer(
             host="127.0.0.1",
             port=0,
+            udp_port=0,
             max_clients=5,
             handshake_timeout=2.0,
             idle_timeout=10.0,

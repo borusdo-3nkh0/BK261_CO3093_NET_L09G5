@@ -1,7 +1,9 @@
 """IT12/IT11 against one owned P2 process; no changes to the P2 checkout."""
 
+import argparse
 import ctypes
 import hashlib
+import inspect
 import json
 import logging
 import multiprocessing as mp
@@ -20,9 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "runtime/reviews/it11-it12-2026-11-08"
-P2 = Path(
-    os.environ.get("CONNECT_P2_ROOT", ROOT.parent.parent / "MMT-P2/A1_Client-Server")
-).resolve()
+P2 = Path(os.environ.get("CONNECT_P2_ROOT", ROOT)).resolve()
 WAIT = 10
 QUIET = 10
 
@@ -79,7 +79,12 @@ def serve(pipe, source, log_file):
         format="%(asctime)s %(levelname)s %(message)s",
         encoding="utf-8",
     )
-    server = SocketServer(host="127.0.0.1", port=0)
+    options = (
+        {"udp_port": 0}
+        if "udp_port" in inspect.signature(SocketServer).parameters
+        else {}
+    )
+    server = SocketServer(host="127.0.0.1", port=0, **options)
     thread = threading.Thread(target=server.start)
     thread.start()
     try:
@@ -97,6 +102,9 @@ def serve(pipe, source, log_file):
             {
                 "pid": os.getpid(),
                 "port": sock.getsockname()[1],
+                "udpPort": server.file_relay.address[1]
+                if hasattr(server, "file_relay")
+                else None,
                 "sourceFile": str(
                     Path(sys.modules[SocketServer.__module__].__file__).resolve()
                 ),
@@ -175,9 +183,11 @@ def client(pipe, gate, port, username, password, timeout):
     closing = threading.Event()
     lock = threading.Lock()
     records, acks, errors, sends, endpoints = [], [], [], [], []
+    online = []
     phase = "login"
 
     def receive():
+        nonlocal online
         try:
             while not closing.is_set():
                 packet = wire.read()
@@ -190,6 +200,8 @@ def client(pipe, gate, port, username, password, timeout):
                                 "receivedAtNs": time.monotonic_ns(),
                             }
                         )
+                    elif packet.get("status") == "LIST_ONLINE_SUCCESS":
+                        online = packet["users"]
                     elif packet.get("status") == "BROADCAST_SUCCESS":
                         acks.append({"phase": phase, "atNs": time.monotonic_ns()})
                     else:
@@ -249,6 +261,12 @@ def client(pipe, gate, port, username, password, timeout):
             op = command["op"]
             if op == "stats":
                 pipe.send(snapshot())
+            elif op == "online":
+                wire.send({"action": "LIST_ONLINE"})
+                deadline = time.monotonic() + timeout
+                while not online and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                pipe.send({"users": list(online)})
             elif op == "arm":
                 phase = command["phase"]
                 pipe.send({"armed": phase})
@@ -541,6 +559,11 @@ def it11(ctx, monitor, port, prefix, password, number):
             result["partialStats"] = exchange(pipes, {"op": "stats"}, WAIT)
             return result
         result["registryReady"] = wait_registry(monitor, names)
+        result["onlineSnapshots"] = exchange(pipes, {"op": "online"}, timeout)
+        require(
+            all(set(row["users"]) == set(names) for row in result["onlineSnapshots"]),
+            "LIST_ONLINE mismatch",
+        )
         stable, stats = workload(
             pipes, gate, names, 5, prefix + f"/N{number}/stable", timeout, monitor
         )
@@ -601,6 +624,13 @@ def it11(ctx, monitor, port, prefix, password, number):
 
 
 def main():
+    global P2, OUTPUT
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=P2)
+    parser.add_argument("--output", type=Path, default=ROOT / "runtime/p3/load")
+    args = parser.parse_args()
+    P2 = args.source.resolve(strict=True)
+    OUTPUT = args.output.resolve() / ("load-" + uuid.uuid4().hex)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     ctx = mp.get_context("spawn")
     run_id = "load-" + uuid.uuid4().hex[:12]
@@ -618,7 +648,8 @@ def main():
         "platform": platform.platform(),
         "logicalCPUs": os.cpu_count(),
         "runnerSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        "p2ReferenceSHA256": {
+        "sourceKind": "configured checkout; not automatically a legacy reference",
+        "p2SourceSHA256": {
             str(p.relative_to(P2)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in (P2 / "server").glob("*.py")
         },
@@ -640,9 +671,11 @@ def main():
         print("IT12: " + report["cases"]["IT12"]["verdict"], flush=True)
         report["cases"]["IT11"] = []
         for count in (10, 20):
+            case_started = time.monotonic()
             result = it11(
                 ctx, parent, report["server"]["port"], run_id, password, count
             )
+            result["elapsedSeconds"] = round(time.monotonic() - case_started, 3)
             report["cases"]["IT11"].append(result)
             print(
                 json.dumps(

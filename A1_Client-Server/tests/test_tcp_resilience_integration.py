@@ -11,6 +11,7 @@ class TestTCPResilienceIntegration(unittest.TestCase):
         self.server = SocketServer(
             host="127.0.0.1",
             port=0,
+            udp_port=0,
             max_clients=1,
             handshake_timeout=0.3,
             idle_timeout=0.5,

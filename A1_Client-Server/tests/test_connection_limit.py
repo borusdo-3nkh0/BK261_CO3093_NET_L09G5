@@ -8,7 +8,7 @@ from server.socket_server import SocketServer
 
 class TestConnectionLimit(unittest.TestCase):
     def setUp(self):
-        self.server = SocketServer(host="127.0.0.1", port=0, max_clients=2)
+        self.server = SocketServer(host="127.0.0.1", port=0, udp_port=0, max_clients=2)
 
         # Reserve a free port for the test.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:

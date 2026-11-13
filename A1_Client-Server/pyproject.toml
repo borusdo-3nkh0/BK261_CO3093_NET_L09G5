@@ -9,7 +9,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-config --strict-markers"
+addopts = "-ra --strict-config --strict-markers -m 'not large and not load'"
+markers = ["large: opt-in 32/256 MiB file checks", "load: opt-in multi-client/file checks"]
+junit_family = "xunit1"
 
 [tool.ruff]
 target-version = "py39"

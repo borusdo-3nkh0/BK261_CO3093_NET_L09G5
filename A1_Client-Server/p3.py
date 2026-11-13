@@ -1,6 +1,7 @@
 """P3 Windows demo/check CLI. Run with this checkout's Python 3.14."""
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -21,6 +22,12 @@ REFERENCES = {
     "p1": "b08572182705912b32b639ca3e8bc150265c4954",
     "p2": "fbf53eb35583ea9eabd9639acaf59fbab4675567",
 }
+INDEPENDENT = [
+    "tests/test_bridge.py",
+    "tests/test_file_bridge.py",
+    "tests/test_payload.py",
+    "tests/test_p3_cli.py",
+]
 SENSITIVE = re.compile(
     r"^(?:token|ticket|password|key|keys|secret|authorization|x-connect-session)$", re.I
 )
@@ -215,6 +222,7 @@ class Check:
             CONNECT_PYTHON=sys.executable,
             CONNECT_REQUIRE_INTEGRATION="1",
         )
+        env.pop("CONNECT_REFERENCE_SUITE", None)
         try:
             if name == "independent":
                 junit = self.output / "independent.xml"
@@ -227,8 +235,7 @@ class Check:
                             "-m",
                             "pytest",
                             "-q",
-                            "--ignore=tests/test_p1_files.py",
-                            "--ignore=tests/test_p2_file_dependency.py",
+                            *INDEPENDENT,
                             f"--junitxml={junit}",
                         ],
                         env=env,
@@ -263,8 +270,99 @@ class Check:
                 ):
                     self.step("js-syntax", [node, "--check", str(source)], env=env)
                 result["steps"].append(dict(name="js-syntax", status="PASS"))
+            elif name in {"integrated", "large", "load"}:
+                env.update(CONNECT_P1_ROOT=str(ROOT), CONNECT_P2_ROOT=str(ROOT))
+                self.report["sources"]["integrated"] = dict(
+                    self.report["sources"]["p3"],
+                    backend="same checkout P1/P2/P3; real P2 tickets",
+                    modules={
+                        str(path): {
+                            "path": str(ROOT / path),
+                            "sha256": hashlib.sha256(
+                                (ROOT / path).read_bytes()
+                            ).hexdigest(),
+                        }
+                        for path in map(
+                            Path,
+                            (
+                                "p1/client.py",
+                                "p1/relay.py",
+                                "shared/protocol.py",
+                                "server/socket_server.py",
+                                "bridge.py",
+                                "bridge_files.py",
+                            ),
+                        )
+                    },
+                )
+                if name == "load":
+                    result["steps"].append(
+                        self.step(
+                            "load-clients",
+                            [
+                                sys.executable,
+                                "-B",
+                                "tests/p2_load_check.py",
+                                "--source",
+                                str(ROOT),
+                                "--output",
+                                str(self.output / "load"),
+                            ],
+                            env=env,
+                        )
+                    )
+                    selection = ["tests/test_integrated_edges.py", "-m", "load"]
+                elif name == "large":
+                    env["CONNECT_LARGE_MIB"] = str(self.args.file_mib)
+                    selection = ["tests/test_integrated_edges.py", "-m", "large"]
+                else:
+                    selection = [
+                        "tests",
+                        "--ignore=tests/test_p1_files.py",
+                        "--ignore=tests/test_p2_file_dependency.py",
+                        *("--ignore=" + path for path in INDEPENDENT),
+                        "-m",
+                        "not large and not load",
+                    ]
+                junit = self.output / (name + ".xml")
+                result["steps"].append(
+                    self.step(
+                        name + "-python",
+                        [
+                            sys.executable,
+                            "-B",
+                            "-m",
+                            "pytest",
+                            "-q",
+                            *selection,
+                            f"--basetemp={self.output / (name + '-tmp')}",
+                            f"--junitxml={junit}",
+                        ],
+                        env=env,
+                        junit=junit,
+                        required=True,
+                    )
+                )
+                if name == "integrated":
+                    result["steps"].append(
+                        self.step(
+                            "integrated-browser",
+                            [
+                                sys.executable,
+                                "-B",
+                                "tests/file_fixture.py",
+                                "--backend",
+                                "integrated",
+                                "--output",
+                                str(self.output / "integrated"),
+                                "--run-browser",
+                            ],
+                            env=env,
+                        )
+                    )
             else:
                 if name in REFERENCES:
+                    env["CONNECT_REFERENCE_SUITE"] = name
                     self.report["sources"][name] = reference(
                         name, getattr(self.args, name + "_root")
                     )
@@ -315,38 +413,33 @@ class Check:
                                 env=env,
                             )
                         )
-                from tests.file_fixture import fixture
-
                 folder = self.output / name
-                with fixture(
-                    name, folder, p1_root=self.args.p1_root, p2_root=self.args.p2_root
-                ) as config:
-                    env["CONNECT_TEST_OUTPUT"] = str(folder / "browser")
-                    if name == "p2":
-                        command = [
-                            node,
-                            "tests/browser-p2-live.cjs",
-                            str(config["http"]),
-                            str(config["tcp"]),
-                        ]
-                    else:
-                        command = [
-                            node,
-                            "tests/browser-file-live.cjs",
-                            "--config",
-                            str(folder / "fixture.json"),
-                            "--output",
-                            str(folder / "browser"),
-                            "--suite",
-                            "ui" if name == "ui" else "files",
-                        ]
-                    result["steps"].append(
-                        self.step(name + "-browser", command, env=env)
-                    )
+                command = [
+                    sys.executable,
+                    "-B",
+                    "tests/file_fixture.py",
+                    "--backend",
+                    name,
+                    "--output",
+                    str(folder),
+                    "--run-browser",
+                ]
+                if name in REFERENCES:
+                    command += ["--" + name + "-root", str(path.resolve())]
+                result["steps"].append(self.step(name + "-browser", command, env=env))
             result.update(status="PASS", reason="Selected checks completed")
         except (Exception, KeyboardInterrupt) as error:
             result["reason"] = public_text(str(error) or "Interrupted")
             self.cancelled = isinstance(error, KeyboardInterrupt)
+        try:
+            staging = self.output / (name + "-tmp")
+            assert staging.resolve().is_relative_to(self.output)
+            if staging.exists():
+                shutil.rmtree(staging)
+        except OSError as error:
+            result.update(
+                status="FAIL", reason="Owned test staging cleanup failed: " + str(error)
+            )
         result["durationSeconds"] = round(time.monotonic() - started, 3)
         print(
             f"{name}: {result['status']} ({result['durationSeconds']}s) {result['reason']}",
@@ -354,12 +447,10 @@ class Check:
         )
 
     def run(self):
-        selected = (
-            {"independent", "ui", "p1", "p2"}
-            if "all" in self.args.suite
-            else set(self.args.suite)
-        )
-        for name in ("independent", "ui", "p1", "p2"):
+        selected = set(self.args.suite)
+        if "all" in selected:
+            selected = (selected - {"all"}) | {"independent", "ui", "integrated"}
+        for name in ("independent", "ui", "integrated", "p1", "p2", "large", "load"):
             if name in selected and not self.cancelled:
                 self.suite(name)
             else:
@@ -417,11 +508,12 @@ def main():
     check.add_argument(
         "--suite",
         nargs="+",
-        choices=["independent", "ui", "p1", "p2", "all"],
-        default=["independent"],
+        choices=["independent", "ui", "integrated", "p1", "p2", "large", "load", "all"],
+        default=["all"],
     )
     check.add_argument("--output", type=Path, default=ROOT / "runtime/p3/checks")
     check.add_argument("--timeout", type=float, default=600)
+    check.add_argument("--file-mib", type=int, choices=[32, 256], default=32)
     for name in REFERENCES:
         check.add_argument(
             "--" + name + "-root",

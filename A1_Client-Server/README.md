@@ -145,45 +145,46 @@ Expected result:
 All checks passed!
 ```
 
-### Automated Tests
+### Automated Tests ? Windows
 
-For the complete verification performed on November 13, 2026, two external reference checkouts were used:
-
-- `../A1_P1_Review/A1_Client-Server`
-- `../A1_P2_Review/A1_Client-Server`
-
-Configure their paths:
+From this integrated checkout, use the venv Python:
 
 ```powershell
-$env:CONNECT_P1_ROOT = (Resolve-Path "..\A1_P1_Review\A1_Client-Server").Path
-$env:CONNECT_P2_ROOT = (Resolve-Path "..\A1_P2_Review\A1_Client-Server").Path
-$env:CONNECT_REQUIRE_INTEGRATION = "1"
+.\.venv\Scripts\python.exe -B p3.py check
 ```
 
-Run the reference P1 tests in a separate Python process:
+This runs independent P3 checks, UI/demo regression, then current integrated
+P1/P2/P3 Python and two-browser acceptance. All production modules come from
+this checkout; reports record its Git SHA, local-change flag, module paths and
+SHA-256. TCP/UDP/HTTP test listeners use port 0. No existing server is stopped.
+JSON, JUnit, logs and browser evidence are under `runtime/p3/checks/check-<UUID>/`.
+PASS/FAIL/SKIP, duration and reasons are printed; failed checks return exit 1.
+Large files and client-load checks are opt-in:
 
 ```powershell
-python -B -m pytest tests/test_p1_files.py -q -rs
+.\.venv\Scripts\python.exe -B p3.py check --suite large --file-mib 32 --timeout 180
+.\.venv\Scripts\python.exe -B p3.py check --suite large --file-mib 256 --timeout 370
+.\.venv\Scripts\python.exe -B p3.py check --suite load --timeout 240
 ```
 
-Run the remaining tests:
+The 256 MiB transfer is **not** part of default CI. Its admission/oversize checks
+are separate from successful end-to-end transfer. Keep any real failure: P1's
+current default send timeout is 300 seconds, while 256 MiB requires at least
+524 seconds at its default 2 ms/chunk pacing. This test work does not change
+P1's algorithm or production configuration.
+
+Legacy reference backends remain a separate group:
 
 ```powershell
-python -B -m pytest tests --ignore=tests/test_p1_files.py -q -rs
+.\.venv\Scripts\python.exe -B p3.py check --suite p1 p2 --p1-root <legacy-P1-app> --p2-root <legacy-P2-app> --timeout 300
 ```
 
-**Verified results:**
-
-| Test group | Result |
-|---|---|
-| P1 reference integration | 5 passed |
-| Remaining automated tests | 283 passed, 58 subtests passed |
-| Total across two processes | 288 passed |
-| Ruff | All checks passed |
-
-The two-process execution is intentional. Running all tests in one Python process can produce P1 reference import-path conflicts caused by Python module caching. This limitation remains unresolved.
-
-Stop the live TCP Server and UDP Relay before running tests to avoid port conflicts.
+These require pinned P1 b085721 and P2 fbf53eb. Each pytest/fixture runs in a
+fresh process; their reports do not establish acceptance of current main.
+Raw pytest defaults to main tests, deselecting legacy/large/load cases. Use the
+CLI to select reference tests instead of mixing checkouts in one process.
+See [current Windows commands and results](docs/testing.md) and
+[the test history](docs/test-plan.md). No new CI run is claimed until pushed.
 
 ### Manual End-to-End Verification
 
@@ -251,7 +252,7 @@ As of November 13, 2026:
 
 - The integrated P1/P2/P3 application has passed the tested TCP messaging and UDP file-transfer workflows.
 - SHA-256 checks confirmed successful bidirectional file transfers.
-- Automated verification completed with 288 passed tests across two separate pytest processes.
+- Current Windows verification separates 293 main Python tests from legacy references; see docs/test-plan.md for actual runs and limits.
 - Ruff static analysis passed.
 - Full end-to-end network encryption and exhaustive production-readiness testing have not been established.
 
