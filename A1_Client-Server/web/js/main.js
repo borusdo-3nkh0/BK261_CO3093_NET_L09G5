@@ -52,7 +52,8 @@ async function start() {
   $("password-toggle").addEventListener("click", () => showPassword($("login-password").type === "password"));
   $("account-mode").addEventListener("click", () => { setMode(!registering); $("login-username").focus(); });
   button.addEventListener("click", () => { setMode(false); dialog.showModal(); $("login-username").focus(); });
-  $("login-close").addEventListener("click", () => dialog.close());
+  $("login-close").addEventListener("click", () => { clearPasswords(); dialog.close(); });
+  dialog.addEventListener("cancel", clearPasswords);
   dialog.addEventListener("close", clearPasswords);
   adapter.subscribe(event => {
     if (event.type === "connection.changed") {

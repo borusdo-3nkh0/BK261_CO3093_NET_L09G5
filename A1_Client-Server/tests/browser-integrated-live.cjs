@@ -118,8 +118,15 @@ async function registration(client, username, password) {
   assert.equal(await client.eval(emptyPasswords), true);
   await fill(username); await client.click("#account-mode");
   assert.equal(await client.eval(emptyPasswords), true, "Mode switch clears credentials");
+  // Hold the queued close event: credentials must already be cleared by the action.
+  await client.eval("window.holdClose=event=>event.stopImmediatePropagation();document.getElementById('login-dialog').addEventListener('close',window.holdClose,true)");
   await client.type("login-password", password); await client.click("#login-close");
   assert.equal(await client.eval(emptyPasswords), true, "Closing the dialog clears credentials");
+  await client.click("#login-open"); await client.type("login-password", password);
+  await client.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await client.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  assert.equal(await client.eval(`!document.getElementById('login-dialog').open&&(${emptyPasswords})`), true, "Escape clears credentials before close notification");
+  await client.eval("document.getElementById('login-dialog').removeEventListener('close',window.holdClose,true);delete window.holdClose");
   assert.equal(await client.eval("location.search===''&&localStorage.length===0&&sessionStorage.length===0"), true);
   report.checks.push("real HTTPS/TLS REGISTER: mismatch and invalid input, duplicate username, pending submit guard, password cleanup, success returns to LOGIN without auto-login or browser storage");
 }
