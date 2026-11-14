@@ -401,7 +401,7 @@ def test_output_browser_running_has_no_invented_progress(tmp_path, capsys):
     assert records[1][-1] == measured(result["durationSeconds"])
 
 
-def test_output_cp1252_labels_and_unicode_report_boundary(tmp_path):
+def test_output_cp1252_escapes_unicode_only_on_terminal(tmp_path):
     script = r"""
 import argparse, json, sys
 from pathlib import Path
@@ -423,12 +423,15 @@ assert json.loads((folder / "report.json").read_text(encoding="utf-8")) == {"sta
 name = "\u0110\u0103ng nh\u1eadp ti\u1ebfng Vi\u1ec7t"
 case = browser_rows({"checks":[name]})[0]
 assert case["id"] == name
-try:
-    check.detail(case["id"])
-except UnicodeEncodeError:
-    print("Known limit: Unicode report names are preserved; CP1252 cannot encode this name.")
-else:
-    raise AssertionError("Unicode report data was unexpectedly replaced")
+check.detail(case["id"])
+error = 'A DOM timeout: "Ho\u00e0n t\u1ea5t"'
+data = {"status":"FAIL", "error":error, "checks":[name]}
+original = json.dumps(data,ensure_ascii=False).encode("utf-8")
+path = folder / "report.json"
+path.write_bytes(original)
+check.show_step("ui-browser", "", None, {"exitCode":1,"durationSeconds":step["durationSeconds"]})
+assert path.read_bytes() == original
+assert json.loads(path.read_text(encoding="utf-8"))["error"] == error
 """
     result = subprocess.run(
         [sys.executable, "-B", "-c", script, str(tmp_path)],
@@ -439,13 +442,51 @@ else:
     )
     assert result.returncode == 0, result.stderr.decode("cp1252")
     text = result.stdout.decode("cp1252")
-    assert text.isascii()
     assert "58 subtest passed" in text
     assert text.count("- = not applicable or not recorded separately") == 1
-    assert "Known limit: Unicode report names are preserved" in text
+    assert r"\u0110\u0103ng nh\u1eadp ti\u1ebfng Vi\u1ec7t" in text
+    assert 'A DOM timeout: "Ho\u00e0n t\\u1ea5t"' in text
+    assert "UnicodeEncodeError" not in text and "Output detail unavailable" not in text
     assert "RUN" in text and "1/1" in text
-    assert len(table_records(text)) == 3  # RUN, final result, summary.
+    assert len(table_records(text)) == 5  # RUN, result, summary, recorded case/run.
+    assert table_records(text)[-1][0] == "FAIL"
     (tmp_path / "cp1252-output.txt").write_bytes(result.stdout)
+
+
+@pytest.mark.parametrize("quiet", [False, True])
+def test_output_cp1252_failure_exit_and_report_remain_unchanged(tmp_path, quiet):
+    script = r"""
+import argparse, json, sys
+from pathlib import Path
+from p3 import Check
+
+assert sys.stdout.encoding.lower() == "cp1252" and sys.flags.utf8_mode == 0
+check = Check(argparse.Namespace(output=Path(sys.argv[1]), timeout=10,
+                                quiet=sys.argv[2]=="1", suite=["ui"]))
+error = 'Original failure: Ho\u00e0n t\u1ea5t \u0110\u1ee9c'
+def fail(*args,**kwargs):
+    raise RuntimeError(error)
+check.step = fail  # Output fixture only; do not start a browser or product suite.
+code = check.run()
+data = json.loads((check.output / "report.json").read_text(encoding="utf-8"))
+suite = next(item for item in data["suites"] if item["name"] == "ui")
+assert data["status"] == "FAIL" and suite["reason"] == error
+assert suite["status"] == "FAIL" and code == 1
+assert error.encode("utf-8") in (check.output / "report.json").read_bytes()
+raise SystemExit(code)
+"""
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", script, str(tmp_path), str(int(quiet))],
+        cwd=ROOT,
+        env=dict(os.environ, PYTHONIOENCODING="cp1252:strict", PYTHONUTF8="0"),
+        capture_output=True,
+        timeout=20,
+    )
+    assert result.returncode == 1
+    text = result.stdout.decode("cp1252")
+    assert "Original failure: Ho\u00e0n t\\u1ea5t \\u0110\\u1ee9c" in text
+    assert "ui: FAIL" in text and text.count("Report:") == 1
+    assert "UnicodeEncodeError" not in text and not result.stderr
 
 
 def test_output_node_and_unittest_use_only_recorded_times(tmp_path, capsys):

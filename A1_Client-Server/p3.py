@@ -112,6 +112,11 @@ def output_line(value):
     return public_text(str(value)).splitlines()[0] if str(value).splitlines() else ""
 
 
+def console_text(value):
+    encoding = sys.stdout.encoding or "utf-8"
+    return public_text(str(value)).encode(encoding, "backslashreplace").decode(encoding)
+
+
 def failure_reason(text, timed_out, exit_code):
     if timed_out:
         return "process timed out"
@@ -364,12 +369,12 @@ class Check:
             if self.progress_width:
                 print("\r" + " " * self.progress_width + "\r", end="", flush=True)
                 self.progress_width = 0
-            print(public_text(message), flush=True)
+            print(console_text(message), flush=True)
 
     def progress_line(self, group):
         final = group["status"] != "RUN"
         self.ensure_header()
-        text = self.group_line(group)
+        text = console_text(self.group_line(group))
         if self.terminal:
             print(
                 "\r" + text.ljust(self.progress_width),
@@ -383,7 +388,7 @@ class Check:
     def columns(self, values):
         cells = []
         for index, (value, width) in enumerate(zip(values, self.column_widths)):
-            text = output_line(value)
+            text = console_text(output_line(value))
             if index < 3 and len(text) > width:
                 text = text[: width - 3] + "..."
             cells.append(text.ljust(width) if index < 3 else text.rjust(width))
@@ -1262,7 +1267,9 @@ class Check:
             )
         result["durationSeconds"] = round(time.monotonic() - started, 3)
         print(
-            f"{name}: {result['status']} ({result['durationSeconds']}s) {output_line(result['reason']).split('; see ', 1)[0]}",
+            console_text(
+                f"{name}: {result['status']} ({result['durationSeconds']}s) {output_line(result['reason']).split('; see ', 1)[0]}"
+            ),
             flush=True,
         )
 
@@ -1298,7 +1305,9 @@ class Check:
                 )
                 if getattr(self.args, "quiet", False):
                     print(
-                        f"{name}: SKIP (0s) {self.report['suites'][-1]['reason']}",
+                        console_text(
+                            f"{name}: SKIP (0s) {self.report['suites'][-1]['reason']}"
+                        ),
                         flush=True,
                     )
         self.report["durationSeconds"] = round(time.monotonic() - self.started, 3)
@@ -1331,7 +1340,7 @@ class Check:
         )
         write_report(self.output / "report.json", self.report)
         self.summary()
-        print("Report:", self.output / "report.json", flush=True)
+        print("Report:", console_text(self.output / "report.json"), flush=True)
         return int(self.report["status"] != "PASS")
 
 
