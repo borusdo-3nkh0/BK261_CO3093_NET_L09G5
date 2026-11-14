@@ -1,1 +1,159 @@
 \section{Server core}
+
+\subsection{Kết nối và handshake}
+Server lắng nghe TCP trên cổng 5000 (mặc định, cấu hình qua \texttt{main.py}) và bọc mỗi kết nối bằng TLS từ phiên bản 1.2 trở lên. Sau khi bắt tay TLS, client gửi dòng \texttt{HELLO2} và server trả \texttt{WELCOME2}. Cả hai bước đều có hạn 5 giấy (\texttt{handshake\_timeout}). Nếu dòng chào sai hoặc quá dài, server trả \texttt{ERROR} rồi đóng kết nối.
+
+Sau handshake, mỗi thông điệp là một đối tượng JSON mã hóa UTF-8, kết thúc bằng ký tự xuống dòng (LF). Server đọc theo từng dòng với deadline tính cho cả dòng, nên một thông điệp bị chia nhỏ qua nhiều lần \texttt{recv} vẫn được ghép đúng.
+
+HÌNH 4.1
+
+\subsection{Xác thực và quản lý phiên}
+Tài khoản được \texttt{AuthManager} lưu trong bộ nhớ (RAM) dưới dạng từ điển có khóa bảo vệ (lock). Mật khẩu không bao giờ được lưu thô: server dùng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên 16 byte và 600.000 vòng lặp (iteration), so sánh kết quả bằng \texttt{hmac.compare\_digest}. Log của server chỉ ghi tên người dùng, không ghi mật khẩu.
+
+\texttt{REGISTER} chỉ tạo tài khoản, không tự đăng nhập. Khi \texttt{LOGIN} thành công, \texttt{SessionManager} ghi lại tên người dùng, địa chỉ IP, cổng TCP của client và trạng thái \texttt{online}. Server xử lý đăng nhập trùng theo hai trường hợp: nếu kết nối này đã đăng nhập thì trả \texttt{ALREADY\_AUTHENTICATED}, nếu tài khoản đang online ở kết nối khác thì trả \texttt{ALREADY\_LOGGED\_IN}. Trường hợp hai kết nối đăng nhập cùng lúc được xử lý bằng việc \texttt{add\_session} trả \texttt{False} cho kết nối đến sau. Khi một kết nối kết thúc, phiên bị gỡ nên người dùng đăng nhập lại được ngay.
+
+\subsection{Xử lý đồng thời (Concurrency)}
+Server dùng mô hình mỗi kết nối một luồng (thread-per-connection) với \texttt{threading.Thread}, không dùng thread pool hay asyncio. Số kết nối tối đa là 20 (\texttt{max\_clients}), được kiểm soát bằng \text{BoundedSemaphore}: khi đã đủ 20, kết nối mới bị ghi log cảnh báo và đóng ngay thay vì phải chờ. Hàng đợi chấp nhận kết nối (\texttt{backlog}) là 5.
+
+Vì nhiều luồng cùng truy cập dữ liệu dùng chung, mỗi cấu trúc có lock riêng:
+
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \caption{Dữ liệu dùng chung và cơ chế bảo vệ}
+    \label{tab:shared_data_protection}
+
+    \renewcommand{\arraystretch}{1.3}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Dữ liệu dùng chung} & \textbf{Cơ chế bảo vệ} \\
+        \midrule
+
+        Tài khoản người dùng
+        & \texttt{AuthManager.\_lock} \\
+
+        Danh sách phiên online
+        & \texttt{SessionManager.\_lock} \\
+
+        Bảng định tuyến (socket, khóa mã hóa từng người)
+        & \texttt{MessageRouter.lock} \\
+
+        Ghi dữ liệu lên socket của từng người
+        & Send lock riêng theo từng người dùng \\
+
+        Danh sách socket và thread của server
+        & \texttt{SocketServer.clients\_lock} \\
+
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+
+Send lock theo từng người dùng bảo đảm hai luồng không ghi xen kẽ vào cùng một socket khi nhiều người cùng gửi tin cho một người nhận. Kiểm thử tải với 10 và 20 client đăng nhập đồng thời cho kết quả đạt, trong đó 20 client đúng bằng giới hạn \texttt{max\_clients} (chi tiết ở mục 8).
+
+\subsection{Định tuyến tin nhắn}
+Mỗi yêu cầu được giải mã và phân loại bởi RequestDispatcher. Các action và phản hồi như sau:
+
+
+\begin{table}[htbp]
+    \centering
+    \small
+
+    \renewcommand{\arraystretch}{1.3}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.5cm}
+        >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Action} & \textbf{Phản hồi thành công} & \textbf{Phản hồi lỗi} \\
+        \midrule
+
+        \texttt{REGISTER}
+        & \texttt{REGISTER\_SUCCESS}
+        & \texttt{REGISTER\_FAILED} \\
+
+        \texttt{LOGIN}
+        & \texttt{LOGIN\_SUCCESS}
+        & \texttt{LOGIN\_FAILED}, \texttt{ALREADY\_LOGGED\_IN}, \texttt{ALREADY\_AUTHENTICATED} \\
+
+        \texttt{UNICAST}
+        & \texttt{UNICAST\_SUCCESS}
+        & \texttt{UNICAST\_FAILED} \\
+
+        \texttt{BROADCAST}
+        & \texttt{LIST\_ONLINE\_SUCCESS}
+        & \_\_ \\
+
+        \texttt{FILE\_SESSION}
+        & \texttt{FILE\_SESSION\_READY}
+        & \texttt{FILE\_SESSION\_FAILED} \\
+
+        \texttt{PING}
+        & \texttt{PONG}
+        & \_\_ \\
+
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+
+Các lỗi chung: \texttt{INVALID\_REQUEST} (JSON sai hoặc action không hỗ trợ, server vẫn giữ kết nối), \texttt{AUTH\_REQUIRED} (chưa đăng nhập mà gửi yêu cầu cần xác thực; riêng \texttt{PING} dùng được cả khi chưa đăng nhập) và \texttt{SECURITY\_FAILED} (giải mã chat thất bại).
+
+\texttt{UNICAST} kiểm tra người nhận và nội dung là chuỗi không rỗng, rồi chuyển đến đúng người nhận. \texttt{BROADCAST} gửi cho mọi người đang online trừ người gửi. \texttt{LIST\_ONLINE} trả danh sách tên đã sắp xếp, bao gồm cả người hỏi. Với chat, server giải mã tin bằng khóa của người gửi rồi mã hóa lại bằng khóa riêng của từng người nhận (xem mục 6). Cần lưu ý \texttt{UNICAST\_SUCCESS} xác nhận server đã gửi xong dữ liệu, không có nghĩa người nhận đã đọc tin.
+
+Với \texttt{FILE\_SESSION}, server yêu cầu UDP relay (do P1 cung cấp) cấp phiên cho người dùng và trả ticket cùng cổng UDP. Ticket được lưu lại trong phiên TCP nên yêu cầu lặp lại không cấp ticket mới. Server cũng trả \texttt{PONG} cho \texttt{PING} để giữ kết nối không bị đóng khi đang truyền file lâu.
+
+\subsection{Xử lý lỗi và độ bền (Resillience)}
+Server dùng hai mức timeout: 5 giây cho handshake và 60 giây cho mỗi dòng yêu cầu khi kết nối rảnh (\texttt{idle\_timeout}). Mỗi loại sự cố có cách xử lý riêng:
+
+
+\begin{table}[htbp]
+    \centering
+    \caption{Các sự cố và cách xử lý}
+    \label{tab:error_handling}
+
+    \renewcommand{\arraystretch}{1.3}
+
+    \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X @{}}
+        \toprule
+        \textbf{Sự cố} & \textbf{Cách xử lý} \\
+        \midrule
+
+        JSON sai hoặc action không hỗ trợ
+        & Trả \texttt{INVALID\_REQUEST}, tiếp tục phục vụ \\
+
+        Dòng yêu cầu quá dài
+        & Trả \texttt{INVALID\_REQUEST} rồi ngắt (trong handshake: \texttt{ERROR}) \\
+
+        Hết timeout hoặc client ngắt
+        & Ghi log, thoát vòng lặp, chạy dọn dẹp \\
+
+        \texttt{ConnectionResetError}
+        & Ghi cảnh báo, chạy dọn dẹp \\
+
+        Lỗi socket khác (\texttt{BrokenPipeError}, \texttt{ssl.SSLError}, ...)
+        & Ghi log chi tiết, chạy dọn dẹp \\
+
+        Giải mã chat thất bại
+        & Trả \texttt{SECURITY\_FAILED} rồi ngắt \\
+
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Dù kết thúc vì lý do nào, khối \texttt{finally} của luồng xử lý luôn thực hiện cùng một chuỗi dọn dẹp: thu hồi ticket ở UDP relay, gỡ khỏi bảng định tuyến, gỡ phiên, đóng context mã hóa, đóng socket và trả lại một chỗ cho semaphore. Nhờ vậy lỗi của một client không ảnh hưởng đến các client khác. Phía relay, mọi lượt truyền file đang dở của người đó bị đánh dấu thất bại (\texttt{PEER\_DISCONNECTED}) và bên còn lại được thông báo.
+
+Khi dừng server, \texttt{stop()} đặt cờ dừng, đóng các socket và đợi từng luồng kết thúc (tối đa 5 giây mỗi luồng), sau đó đóng relay.
+
+Trong quá trình kiểm thử tải 10 client, server từng gặp lỗi \texttt{BlockingIOError} (WinError 10035) khi đọc dữ liệu TLS ở chế độ không chặn, làm một client bị ngắt khi các client khác đang broadcast. Nhóm đã khắc phục bằng cách cho luồng đọc và luồng ghi dùng chung một lock, chỉ gọi \texttt{recv} không chặn trong lock và chờ socket sẵn sàng ở ngoài lock theo deadline ban đầu của cả dòng. Sau khi sửa, kiểm thử 10 và 20 client đều đạt.
