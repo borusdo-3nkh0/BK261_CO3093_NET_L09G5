@@ -23,6 +23,32 @@ Mặc định tương đương `--suite all`: `independent` → `ui` → `integr
 
 Các lệnh ngắn trong bảng dùng cùng `.venv\Scripts\python.exe -B`. `all` không chọn legacy/large/load; có thể chọn rõ `--suite all p1 p2` để hồi quy main và legacy riêng trong một lượt. CI P3 chỉ Windows/Python 3.14: step tích hợp/security trước, legacy sau; push đúng nhánh bàn giao kích hoạt workflow. Không chạy file 256 MiB mặc định. Kết quả CI phải đối chiếu run gắn SHA thực tế, không dùng CI nhánh cha thay cho nhánh đã gom.
 
+## Output bước 10
+
+Mặc định `check` in tên/chức năng suite rồi gom pytest theo file/module. Hook nhỏ `p3_progress.py` đọc collection sau deselection và gửi sự kiện hoàn thành sau teardown; không đổi assertion, thứ tự hoặc kết quả test. `DONE x/N` là số test cha hoàn thành trên tổng collection thật; PASS/FAIL/SKIP là ba số riêng. Không in riêng ca PASS; chỉ FAIL/SKIP có ID và lý do.
+
+- Trên terminal, dòng module được cập nhật bằng carriage return; khi redirect hoặc có biến CI, mỗi sự kiện thành một dòng thường, không có ký tự cập nhật terminal. `--quiet` giữ output ngắn cũ và không bật hook tiến độ. Chú thích cuối in một lần: “— = không áp dụng hoặc chưa được ghi nhận riêng”.
+- Thời gian module đo monotonic từ lúc bắt đầu test đầu tiên đến sau teardown test cuối cùng, không cộng thời gian JUnit hoặc chia thời gian suite. Nhóm bị dừng sớm hiện INCOMPLETE, chưa chạy hiện NOT RUN; không gán các test chưa thực hiện thành SKIP. Nếu không nhận được sự kiện, chỉ trình bày dữ liệu cuối từ JUnit với tổng collection/thời gian module “—”.
+- Sự kiện đi qua file tạm nội bộ, được dọn sau step; `communicate`, deadline và Windows Job Object hiện có vẫn quản lý process. Không thêm định dạng/field vào JSON/JUnit, dependency hay framework báo cáo.
+- Browser chưa có sự kiện hoàn thành trực tiếp: chỉ hiện **Đang chạy**, DONE “—”, rồi nhóm/viewport hoặc checks/verdict đã ghi trong report cuối. Browser run dùng thời gian toàn process; DONE 1/1 khi có report kết thúc hợp lệ, không gán 1/1 khi timeout, crash không có report cuối hoặc chỉ có failure dump. Assertion regression/demo giữ PASS đã ghi, FAIL/SKIP/thời gian riêng không có dùng “—”; không biến mỗi assertion thành kịch bản hoặc cộng vào pytest. Tên case lấy mô tả trong report, bỏ tiền tố `checks[n]`.
+- Subtest đếm riêng từ dòng tổng kết pytest, không cộng vào test cha. Tổng được in ngoài bảng (ví dụ “58 subtest đạt”), không tạo hàng thiếu ID/thời gian. Cuối lượt chỉ có bảng nhóm, trạng thái, PASS/FAIL/SKIP, thời gian thực và đường dẫn report; không in lại danh sách ca PASS.
+
+Đã đọc lại lượt đầy đủ `check-2085dca2852d4284b1ea5c7f2c8c74b4`: FAIL 257,353s, independent 132 PASS/1 FAIL do assertion dò `88` khớp thư mục `pytest-88`; số subtest đúng là 3. UI, integrated (188 test/58 subtest + browser) và security (25 test + browser) đạt trong lượt đó. Đã sửa test để kiểm bản ghi/số đếm, không dò toàn output; không chạy lại full suite để lấy số liệu.
+
+Kiểm tra local trực tiếp sau sửa: 22 PASS/14 deselected, 6,20s; mẫu ngắn đã PASS trong lượt trước và không chạy lại để lấy số. `runtime/runner-progress-sample.txt` và `live-proof.txt` trong run mẫu chứng minh tiến độ được in trước khi child kết thúc bằng barrier có giới hạn. Đây là fixture runner/output, không phải nghiệm thu mới của P1/P2/browser. Chưa chạy CI, commit hoặc push.
+
+Lượt thu gọn kiểm tra phụ: lint/format/js-support mỗi nhóm một dòng kết quả; js-syntax dùng toàn bộ danh sách file đã có, tiến độ DONE x/N và một dòng kết quả cuối. `syntax files` là số file kiểm cú pháp, tách khỏi pytest; thời gian cả nhóm đo monotonic quanh vòng kiểm tra, không cộng thời gian từng file. Lỗi vẫn dừng theo hành vi cũ, file chưa chạy không bị tính thành SKIP. Chỉ FAIL/SKIP in chi tiết; log vẫn nằm cạnh report theo tên step và thông tin lỗi hiện có, không thêm field JSON/JUnit. Terminal chỉ in đường dẫn report chính ở cuối.
+
+RUN, kết quả và bảng cuối dùng cùng độ rộng cột dựa trên tên module đã biết: trạng thái/loại/tên căn trái, DONE/số/thời gian căn phải; tên dài được rút gọn ở terminal, giữ nguyên trong report. Mẫu phụ ở `runtime/aux-output-sample.txt` chạy Ruff/Node thật trên fixture nhỏ: PASS, tổng 0,688s. Kiểm tra trực tiếp bị ảnh hưởng: **13 PASS/26 deselected, 1,85s**; Ruff/format/diff đạt. Không chạy full suite hoặc cập nhật CI/PR.
+
+Hoàn thiện DONE: lint/format hiện RUN 0/1 và kết thúc 1/1 theo exit code thật (FAIL cũng hoàn thành một lệnh). js-support chưa có luồng sự kiện từng test nên RUN hiện “—”; cuối lượt đọc summary Node `tests/pass/fail/cancelled/skipped/todo`, DONE là số outcome đã xử lý, không phải số PASS. PASS/FAIL/SKIP giữ counter Node; cancelled/todo cũng tính vào DONE nếu xuất hiện. Summary thiếu dữ liệu thì giữ “—”, không suy tổng từ số dòng PASS. Log cũ `check-e23323d0f54d430fb784462da736ab0f/js-support.log` được đọc lại thành 6/6, không chạy lại.
+
+Mẫu mới `runtime/aux-done-sample.txt` chỉ có một Node test fixture nên DONE đúng là 1/1, tổng lượt mẫu 0,778s. Kiểm tra output liên quan: **12 PASS/35 deselected, 2,08s**; chưa chạy full/CI hoặc commit/push.
+
+Lượt thu gọn browser/subtest: **26 PASS/29 deselected, 2,91s** cho test output trực tiếp bị ảnh hưởng. `runtime/browser-output-sample.txt` chỉ render lại report/JUnit/log đã có của `check-2085dca2852d4284b1ea5c7f2c8c74b4`, giữ thời gian cũ, không phải lượt nghiệm thu browser mới. Không chạy full/browser, không đổi report JSON/JUnit hoặc cập nhật CI/PR.
+
+Sau khi duyệt output, chạy đúng một lượt mặc định `python -X utf8 -B p3.py check`: **PASS 261,813s**, run `check-ca0803bcbc8a4f02b431dd4b1185eafb`. Independent: 156 pytest test, Ruff check/format, 6 Node test và 23 file JS syntax đạt; UI/demo đạt; integrated: 188 pytest test/58 subtest + browser thật đạt; security: 25 pytest test + browser thật đạt. Legacy/large/load không được chọn trong lượt local này. Các ghi chép local phía trên là lịch sử trước khi cho phép commit/push; CI phải xem kết quả gắn commit trên PR #3. Runtime/report chỉ giữ local, không đưa vào commit.
+
 ## Timeout, cleanup và bằng chứng
 
 - Mỗi lượt UUID ở `runtime/p3/checks/check-<UUID>/`: report.json, log, JUnit, fixture.json (nguồn module thực/SHA), browser report/ảnh. SHA là HEAD cộng cờ trackedChanges; lượt chưa commit không phải snapshot nguyên trạng của main.
