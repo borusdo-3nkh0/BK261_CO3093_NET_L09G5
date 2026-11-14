@@ -243,7 +243,9 @@ def test_one_command_demo_uses_own_assets_and_stops(tmp_path):
         target=lambda: lines.put(process.stdout.readline()), daemon=True
     ).start()
     try:
-        url = re.search(r"http://\S+", lines.get(timeout=10)).group()
+        banner = lines.get(timeout=10)
+        assert banner.startswith("Simulation mode: ")
+        url = re.search(r"http://\S+", banner).group()
         with urlopen(url, timeout=2) as response:
             assert "Chế độ mô phỏng" in response.read().decode("utf-8")
         with urlopen(url.replace("local-demo/", ""), timeout=2) as response:
@@ -270,7 +272,7 @@ def test_output_junit_status_time_reason_and_duplicate_records(tmp_path):
     assert rows[1]["reason"] == "not available"
     assert rows[2]["status"] == "FAIL" and rows[2]["seconds"] is None
     assert "wrong value" in rows[2]["reason"] and "teardown" in rows[2]["reason"]
-    assert measured(None) == measured("not measured") == "—"
+    assert measured(None) == measured("not measured") == "-"
 
 
 def test_output_subtests_are_separate_and_only_read_final_summary(tmp_path, capsys):
@@ -300,7 +302,7 @@ def test_output_subtests_are_separate_and_only_read_final_summary(tmp_path, caps
     check.report["suites"] = [dict(name="direct", status="PASS")]
     check.summary()
     summary = capsys.readouterr().out
-    assert summary.count("3 subtest đạt") == 1
+    assert summary.count("3 subtest passed") == 1
     assert not any(row[1] == "subtest" for row in table_records(summary))
 
 
@@ -337,7 +339,7 @@ def test_output_browser_scenarios_are_not_assertions_or_invented_failures(
     case = next(row for row in records if row[1] == "browser case")
     assert case[2] == "login and incoming chat" and "checks[" not in text
     assertions = next(row for row in records if row[1] == "browser assertions")
-    assert assertions[3:] == ["—", "2", "—", "—", "—"]
+    assert assertions[3:] == ["-", "2", "-", "-", "-"]
     run = next(row for row in records if row[1] == "browser run")
     assert run[0] == "FAIL" and run[3] == "1/1"
 
@@ -357,10 +359,10 @@ def test_output_demo_counts_and_unknown_values_are_preserved():
         ("PASS", "report.json", 0, False, "1/1", "PASS"),
         ("FAIL", "report.json", 1, False, "1/1", "FAIL"),
         ("SKIP", "results.json", 0, False, "1/1", "SKIP"),
-        ("PASS", "report.json", 0, True, "—", "FAIL"),
-        ("PASS", "report.json", 1, False, "—", "FAIL"),
-        ("FAIL", "partial-failure.json", 1, False, "—", "FAIL"),
-        (None, "report.json", 1, False, "—", "FAIL"),
+        ("PASS", "report.json", 0, True, "-", "FAIL"),
+        ("PASS", "report.json", 1, False, "-", "FAIL"),
+        ("FAIL", "partial-failure.json", 1, False, "-", "FAIL"),
+        (None, "report.json", 1, False, "-", "FAIL"),
     ],
 )
 def test_output_browser_run_completion_and_whole_process_time(
@@ -394,9 +396,56 @@ def test_output_browser_running_has_no_invented_progress(tmp_path, capsys):
     (folder / "report.json").write_text('{"status":"PASS"}', encoding="utf-8")
     result = check.step("ui-browser", [sys.executable, "-c", "pass"])
     records = table_records(capsys.readouterr().out)
-    assert records[0][0] == "RUN" and records[0][3:] == ["—"] * 5
+    assert records[0][0] == "RUN" and records[0][3:] == ["-"] * 5
     assert records[1][0] == "PASS" and records[1][3] == "1/1"
     assert records[1][-1] == measured(result["durationSeconds"])
+
+
+def test_output_cp1252_labels_and_unicode_report_boundary(tmp_path):
+    script = r"""
+import argparse, json, sys
+from pathlib import Path
+from p3 import Check, browser_rows, output_row
+
+assert sys.stdout.encoding.lower() == "cp1252"
+assert sys.flags.utf8_mode == 0
+check = Check(argparse.Namespace(output=Path(sys.argv[1]), timeout=10, quiet=False))
+folder = check.output / "direct"
+folder.mkdir()
+(folder / "report.json").write_text('{"status":"PASS"}', encoding="utf-8")
+step = check.step("ui-browser", [sys.executable, "-c", "pass"])
+check.output_rows["direct"].append(output_row("subtest", "summary", counts={"PASS":58}))
+check.report.update(status="PASS", durationSeconds=step["durationSeconds"],
+                    suites=[dict(name="direct", status="PASS")])
+check.summary()
+assert json.loads((folder / "report.json").read_text(encoding="utf-8")) == {"status":"PASS"}
+
+name = "\u0110\u0103ng nh\u1eadp ti\u1ebfng Vi\u1ec7t"
+case = browser_rows({"checks":[name]})[0]
+assert case["id"] == name
+try:
+    check.detail(case["id"])
+except UnicodeEncodeError:
+    print("Known limit: Unicode report names are preserved; CP1252 cannot encode this name.")
+else:
+    raise AssertionError("Unicode report data was unexpectedly replaced")
+"""
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", script, str(tmp_path)],
+        cwd=ROOT,
+        env=dict(os.environ, PYTHONIOENCODING="cp1252:strict", PYTHONUTF8="0"),
+        capture_output=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr.decode("cp1252")
+    text = result.stdout.decode("cp1252")
+    assert text.isascii()
+    assert "58 subtest passed" in text
+    assert text.count("- = not applicable or not recorded separately") == 1
+    assert "Known limit: Unicode report names are preserved" in text
+    assert "RUN" in text and "1/1" in text
+    assert len(table_records(text)) == 3  # RUN, final result, summary.
+    (tmp_path / "cp1252-output.txt").write_bytes(result.stdout)
 
 
 def test_output_node_and_unittest_use_only_recorded_times(tmp_path, capsys):
@@ -432,7 +481,7 @@ def test_output_quiet_failure_summary_and_report_schema(tmp_path, capsys, quiet)
     if not quiet:
         assert "Pinned P1" in text and "Missing P1 checkout" in text
         assert "Not selected" in text and "n/a" not in text
-        assert text.count("— = không áp dụng hoặc chưa được ghi nhận riêng") == 1
+        assert text.count("- = not applicable or not recorded separately") == 1
     report = json.loads((check.output / "report.json").read_text(encoding="utf-8"))
     assert set(report) == original_keys | {"durationSeconds", "artifactAudit", "status"}
     assert "output_rows" not in report
@@ -838,7 +887,7 @@ def test_output_aux_short_sample(tmp_path, capsys):
         ] == [("RUN", "0/1"), ("PASS", "1/1")]
     assert [
         (row[0], row[3]) for row in table_records(before) if row[2] == "js-support"
-    ] == [("RUN", "—"), ("PASS", "1/1")]
+    ] == [("RUN", "-"), ("PASS", "1/1")]
     syntax = [row for row in table_records(summary) if row[2] == "js-syntax"]
     assert (
         len(syntax) == 1
@@ -910,4 +959,4 @@ def test_output_js_support_without_summary_has_no_fabricated_total(tmp_path, cap
         dict(exitCode=0, durationSeconds=0.1),
     )
     record = table_records(capsys.readouterr().out)[0]
-    assert record[3] == "—" and "total" not in check.output_groups["direct"][0]
+    assert record[3] == "-" and "total" not in check.output_groups["direct"][0]

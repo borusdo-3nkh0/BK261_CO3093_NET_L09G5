@@ -103,9 +103,9 @@ SUITE_PURPOSE = {
 def measured(value):
     try:
         seconds = float(value)
-        return f"{seconds:.3f}s" if math.isfinite(seconds) and seconds >= 0 else "—"
+        return f"{seconds:.3f}s" if math.isfinite(seconds) and seconds >= 0 else "-"
     except (TypeError, ValueError):
-        return "—"
+        return "-"
 
 
 def output_line(value):
@@ -402,12 +402,12 @@ class Check:
         counts = group.get(
             "counts", {s: int(group["status"] == s) for s in ("PASS", "FAIL", "SKIP")}
         )
-        done = f"{group['done']}/{group['total']}" if "done" in group else "—"
+        done = f"{group['done']}/{group['total']}" if "done" in group else "-"
         numbers = [
-            str(counts.get(s)) if counts.get(s) is not None else "—"
+            str(counts.get(s)) if counts.get(s) is not None else "-"
             for s in ("PASS", "FAIL", "SKIP")
         ]
-        elapsed = "—" if group["status"] == "RUN" else measured(group["seconds"])
+        elapsed = "-" if group["status"] == "RUN" else measured(group["seconds"])
         return self.columns(
             (
                 group["status"] or "RECORDED",
@@ -834,9 +834,9 @@ class Check:
                     + "; ".join(
                         f"{sum(row['counts'].get(status) or 0 for row in subtests)} subtest {label}"
                         for status, label in (
-                            ("PASS", "đạt"),
-                            ("FAIL", "lỗi"),
-                            ("SKIP", "bỏ qua"),
+                            ("PASS", "passed"),
+                            ("FAIL", "failed"),
+                            ("SKIP", "skipped"),
                         )
                         if any(
                             row["counts"].get(status) is not None for row in subtests
@@ -852,7 +852,7 @@ class Check:
         self.detail(
             f"Total: {self.report['status']}; elapsed {measured(self.report['durationSeconds'])}"
         )
-        self.detail("— = không áp dụng hoặc chưa được ghi nhận riêng")
+        self.detail("- = not applicable or not recorded separately")
 
     def step(self, name, command, *, cwd=ROOT, env=None, junit=None, required=False):
         remaining = self.deadline - time.monotonic()
@@ -864,9 +864,6 @@ class Check:
             self.ensure_header()
             self.detail(
                 self.group_line(output_row("browser run", name, "RUN", counts={}))
-            )
-            self.detail(
-                "  Đang chạy; kết quả lấy từ report cuối, không giả lập bộ đếm."
             )
         elif name in {"lint", "format", "js-support"} and not getattr(
             self.args, "quiet", False
@@ -1399,7 +1396,7 @@ def main():
         partial(SimpleHTTPRequestHandler, directory=str(ROOT / "web")),
     ) as server:
         print(
-            f"Chế độ mô phỏng: http://127.0.0.1:{server.server_port}/local-demo/",
+            f"Simulation mode: http://127.0.0.1:{server.server_port}/local-demo/",
             flush=True,
         )
         print("No real backend, tickets or file bytes. Ctrl+C to stop.", flush=True)
