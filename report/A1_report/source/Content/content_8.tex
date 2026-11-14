@@ -1,0 +1,108 @@
+\section{Kiểm thử hệ thống}
+
+\subsection{Công cụ và quy trình}
+Nhóm dùng \texttt{pytest} cho kiểm thử Python và Ruff cho lint, import và định dạng mã. Phần JavaScript của giao diện được kiểm thử bằng trình duyệt Chrome thật, vì Ruff không kiểm tra JavaScript. Môi trường chạy là Windows với Python 3.14, Node 24+ và Chrome/Edge.
+
+Toàn bộ kiểm thử được gom vào một bộ chạy tập trung \texttt{p3.py check}, cho phép chọn từng nhóm (suite). Bộ chạy này có các cơ chế bảo đảm kết quả đáng tin cậy:
+\begin{itemize}
+    \item PASS chỉ khi nhóm được chọn thật sự chạy và hoàn tất.
+    \item Mỗi lượt chạy có UUID riêng và lưu báo cáo JSON, log, JUnit và ảnh chụp trình duyệt, dữ liệu nhạy cảm (khóa, ticket) được loại khỏi báo cáo.
+    \item Có thời hạn tổng cho mỗi lượt, và Windows Job Object dọn toàn bộ cây tiến trình do lượt chạy tạo ra.
+    \item Kiểm thử dùng cổng ngẫu nhiên do hệ điều hành cấp, không dừng tiến trình nào có sẵn.
+\end{itemize}
+
+Quy trình CI trên GitHub Actions chạy trên Windows với Python 3.14.
+
+\subsection{Các nhóm kiểm thử}
+
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.5cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Nhóm} & \textbf{Nội dung} \\
+        \midrule
+
+        \texttt{independent}
+        & Kiểm tra Python độc lập với backend, Ruff, định dạng, kiểm tra JavaScript \\
+
+        \texttt{ui}
+        & Kiểm thử giao diện trên Chrome ở bốn kích thước màn hình, dùng adapter giả lập \\
+
+        \texttt{integrated}
+        & Server, UDP relay, bridge và giao diện chạy cùng một checkout, kèm hai phiên Chrome thật qua TLS/HTTPS \\
+
+        \texttt{security}
+        & Sai khóa, sai thẻ, sai AAD, nonce, replay, gửi lại, chứng thư và thu hồi phiên \\
+
+        \texttt{p1}, \texttt{p2}
+        & Hồi quy cho từng thành phần ở bản đã ghim, chạy riêng, không thay cho nghiệm thu tích hợp \\
+
+        \texttt{load} (tùy chọn)
+        & 10 và 20 client đồng thời, cộng thêm file và chat với 4 client \\
+
+        \texttt{large} (tùy chọn)
+        & File 32 MiB và 256 MiB \\
+
+        \bottomrule
+    \end{tabularx}
+    \caption{Các nhóm kiểm thử và phạm vi kiểm tra của hệ thống}
+\end{table}
+
+
+Hai nhóm tùy chọn không chạy mặc định vì tốn thời gian và tài nguyên.
+
+\subsection{Kết quả}
+Các kết quả dưới đây ghi nhận ngày 14/11/2026 trên Windows, Python 3.14.4, dùng tải khoản và dữ liệu thử.
+
+\begin{table}[htbp]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{5cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Kiểm thử} & \textbf{Kết quả} \\
+        \midrule
+        Module truyền file UDP (giao thức, CLI, truyền UDP)
+        & \textbf{36/36} đạt \\
+
+        Nhóm tích hợp: Python và hai Chrome với server, relay thật
+        & \textbf{188 test} và 58 subtest đạt, không bỏ qua ca nào \\
+
+        Nhóm bảo mật: Python và HTTPS/trình duyệt
+        & \textbf{23 test} đạt \\
+
+        Giao diện chính thức (adapter giả lập)
+        & \textbf{242 kiểm tra} mỗi kích thước 1440$\times$900, 1366$\times$768, 1100$\times$750 và \textbf{246} ở 390$\times$844 \\
+
+        Ruff lint và format
+        & Đạt; không thêm dependency \\
+
+        Windows CI
+        & Đạt cả 6 nhóm: \texttt{independent}, \texttt{ui}, \texttt{integrated}, \texttt{security}, \texttt{p1}, \texttt{p2} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Kết quả kiểm thử các thành phần và nhóm chức năng của hệ thống}
+\end{table}
+
+Nhóm tích hợp bao phủ chat chung và riêng hai chiều, gửi file hai chiều kèm đối chiếu SHA-256, ACK, online/offline, kết nối lại, chat trong lúc file còn đang truyền, và ngắt kết nối giữa DATA, FIN, COMPLETE. Trong lượt nghiệm thu trình duyệt thật, các file Unicode được truyền với kích thước 8.388.608 byte, 262.147 byte, 28 byte (cùng tên, nội dung mới) và file rỗng 0 byte; hash của file tải về đều khớp. Một ca từ chối file và một ca ngắt kết nối khi người nhận đang chờ chấp nhận cũng đạt, không có trạng thái hoàn tất giả.
+
+\subsection{Hạn chế của kiểm thử}
+\begin{itemize}
+    \item Mọi kiểm thử chạy trên localhost, trên Windows, chưa có kết quả trên mạng LAN nhiều máy.
+    \item Chưa kiểm thử đĩa đầy và chưa đo hiệu năng (benchmark), kết quả tải chỉ cho biết các lượt đã chạy đạt, không cho biết tần suất lỗi.
+    \item Nhóm tải và file lớn chạy riêng trên máy phát triển, không nằm trong CI mặc định.
+\end{itemize}

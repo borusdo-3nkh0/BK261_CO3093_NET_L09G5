@@ -1,0 +1,50 @@
+% ============================================================
+%  CONTRIBUTION.TEX  —  Bảng phân công nhóm
+%  Chỉnh sửa: thêm/bớt hàng trong bảng
+% ============================================================
+
+\newpage
+\thispagestyle{empty}
+
+\begin{center}
+
+  % -- Group info
+  \textcolor{colorText}{\large\bfseries
+    \iflanguage{vietnamese}{BẢNG PHÂN CÔNG NHIỆM VỤ}{CONTRIBUTION TABLE}
+  }
+
+  \vspace{0.5cm}
+
+  \textcolor{colorText}{\normalsize
+    \iflanguage{vietnamese}{Nhóm}{Group}: \textbf{\docGroup} \quad
+    \iflanguage{vietnamese}{Lớp}{Class}: \textbf{\docClass} \quad
+    \iflanguage{vietnamese}{Môn}{Course}: \textbf{\docCourse} \quad
+    \iflanguage{vietnamese}{Giảng viên}{Instructor}: \textbf{\docInstructor}
+  }
+
+  \vspace{0.8cm}
+
+  % -- Contribution table
+  \begin{tabularx}{0.95\textwidth}{|
+    >{\centering\arraybackslash}p{0.05\textwidth}|
+    >{\raggedright\arraybackslash}X|
+    >{\centering\arraybackslash}p{0.1\textwidth}|
+    >{\raggedright\arraybackslash}X|
+    >{\centering\arraybackslash}p{0.15\textwidth}|
+  }
+  \hline
+  \textbf{\iflanguage{vietnamese}{STT}{No.}} &
+  \textbf{\iflanguage{vietnamese}{Họ và tên}{Full Name}} &
+  \textbf{\iflanguage{vietnamese}{MSSV}{ID}} &
+  \textbf{\iflanguage{vietnamese}{Nhiệm vụ}{Task}} &
+  \textbf{\iflanguage{vietnamese}{Ký tên}{Signature}} \\
+  \hline
+  1 & Nguyễn Thanh Nguyên & 2412359 & Thiết kế giao thức ứng dụng; Xây dựng UDP relay theo phiên; Truyền file tin cập qua UDP & \\[1.5cm]
+  \hline
+  2 & Bùi Quang Đức & 2410796 & Kết nối TCP/TLS, handshake và xác thực; Quản lý phiên, xử lý đồng thời nhiều client và định tuyến tin nhắn & \\[1.5cm]
+  \hline
+  3 & Phạm Quốc Huy & 2411261 & Bảo mật: TLS, cấp khóa theo phiên, chống relay; Giao diện Web; Kiểm thử hệ thống & \\[1.5cm]
+  \hline
+  \end{tabularx}
+
+\end{center}

@@ -1,0 +1,75 @@
+\section{Bảo mật}
+
+\subsection{Mô hình tin cậy và phạm vi}
+Bảo mật được thiết kế theo từng chặng (hop-by-hop): mỗi chặng truyền dữ liệu có lớp bảo vệ và khóa riêng. Server và relay là thành phần được tin cậy: chúng giải mã nội dung rồi mã hóa lại bằng khóa của chặng kế tiếp. Vì vậy đây không phải mã hóa đầu cuối (E2EE), và server vẫn đọc được nội dung chat và file đi qua nó.
+
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{3.2cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Chặng} & \textbf{Lớp bảo vệ} \\
+        \midrule
+
+        Trình duyệt $\leftrightarrow$ bridge
+        & HTTPS; không dùng HTTP \\
+
+        Bridge $\leftrightarrow$ server (TCP)
+        & TLS từ 1.2, xác minh CA và hostname; REGISTER, LOGIN và việc cấp khóa, ticket nằm trong TLS; nội dung chat được mã hóa thêm bằng AES-256-GCM \\
+
+        Client $\leftrightarrow$ relay (UDP)
+        & AES-256-GCM cho từng gói, kèm thẻ HMAC xác thực \\
+
+        \bottomrule
+    \end{tabularx}
+    \caption{Các lớp bảo vệ trong quá trình truyền thông giữa các thành phần}
+\end{table}
+
+
+\subsection{TLS và HTTPS}
+Lệnh \texttt{python -m security.tls} sinh một CA thử, chứng thư cho \texttt{localhost} và \text{127.0.0.1} cùng khóa riêng tại \texttt{runtime/tls/}. Chứng thư hết hạn sau 30 ngày và lệnh từ chối ghi đè file đã có. Khóa riêng của CA chỉ dùng lúc tạo chứng thư rồi bị bỏ đi, không được lưu lại.
+
+Người dùng tin cậy CA do chính mình vừa tạo để trình duyệt xác minh HTTPS. Client xác minh CA và hostname nên chứng thư thiếu, sai CA hoặc sai hostname đều làm kết nối thất bại, và hệ thống không bao giờ tự hạ xuống plaintext. Khóa riêng, khóa phiên và ticket không được đưa vào Git.
+
+\subsection{Mã hóa payload bằng AES-256-GCM}
+Trường \texttt{message} trên kênh TCP có dạng \texttt{\{v:2, sid:<UUID phiên>, data:base64(nonce 12 byte || ciphertext || tag 16 byte)\}}. Văn bản gốc tối đa 4.000 ký tự, và khung TCP bảo mật tối đa 32.768 byte gồm ký tự xuống dòng. Server giải mã tin trước khi định tuyến, sau đó mã hóa lại bằng khóa riêng của từng người nhận, kể cả với broadcast.
+
+Mỗi gói UDP là \texttt{header 44 byte || nonce 12 byte} \texttt{|| dữ liệu mã hóa (0 đến} \texttt{996 byte) || thẻ GCM 16 byte || thẻ HMAC 16 byte}, tức tối đa 1.084 byte. Thẻ HMAC tính trên header và phần mã hóa bằng khóa riêng của ticket; khóa này không dùng làm khóa AES. Quy trình đăng ký điểm cuối (BIND, CHALLENGE, PROVE, BOUND) cũng được bảo vệ bằng AES-GCM và HMAC. Relay giải mã gói trước khi kiểm tra và định tuyến, rồi mã hóa lại bằng khóa của người nhận đích. Bộ giải mã phiên bản 2 từ chối gói phiên bản 1 dù biết khóa HMAC, và không tự đoán phiên bản hay hạ cấp.
+
+Kích thước và hash của file được tính trên dữ liệu gốc (plaintext). Dữ liệu chỉ được ghi xuống đĩa sau khi giải mã thành công.
+
+\subsection{Quản lý khóa theo phiên}
+Khi \texttt{LOGIN} thành công, phản hồi (đi trong TLS) chứa mã phiên (UUID) và hai khóa AES 32 byte cho hai chiều, \texttt{c2s} (client gửi server) và s2c (server gửi client). Server tạo khóa mới cho mỗi phiên và gửi phản hồi trước khi công bố người dùng là online. Phần khóa này chỉ do server giữ trong bộ nhớ và không bao giờ được trả ra trình duyệt.
+
+Với file, \texttt{FILE\_SESSION} cấp thêm ticket gồm tên người dùng, mã phiên, khóa HMAC riêng và hai khóa AES dành cho file. Hai khóa file khác hoàn toàn hai khóa chat. Yêu cầu \texttt{FILE\_SESSION} lặp lại trong cùng phiên trả về ticket cũ và không đặt lại bộ đếm nonce. Khi ngắt kết nối, server thu hồi route, context mã hóa và ticket ở relay. Mỗi lần LOGIN mới cấp khóa và UUID mới, nên không thể tái tạo hay đặt lại context bằng ticket cũ. Khóa và ticket không bao giờ được ghi ra file.
+
+\subsection{Nonce, dữ liệu xác thực kèm theo (AAD) và chống replay}
+Mỗi chiều của mỗi context giữ một bộ đếm nonce 96 bit, bắt đầu từ 0 và được bảo vệ bằng lock; bộ đếm không bao giờ được đặt lại hay sao chép. Nhờ đó một khóa không bao giờ dùng lại cùng một nonce.
+
+Dữ liệu xác thực kèm theo (AAD) buộc mỗi bản mã vào đúng ngữ cảnh của nó: chuỗi tiền tố \texttt{Connect-v2/}, mục đích (chat hay file), mã phiên và chiều truyền. Với chat, AAD còn gồm loại tin, người gửi và người nhận (với broadcast, người nhận là rỗng); với file, AAD gồm toàn bộ header 44 byte. Vì vậy một gói bị chuyển sang phiên khác, đổi chiều hoặc bị sửa header sẽ không giải mã được.
+
+Chống replay dùng một cửa sổ bitmap 4.096 bộ đếm cho mỗi chiều. Cửa sổ chỉ cập nhật sau khi GCM xác thực thành công. Gói đến muộn hoặc đảo thứ tự trong cửa sổ vẫn được nhận, còn gói trùng nonce hoặc quá cũ bị bỏ. Khi người gửi truyền lại một chunk (mục 5.2), hệ thống giữ nguyên mã lượt truyền và số thứ tự nhưng mã hóa lại với nonce mới.
+
+\subsection{Xử lý lỗi bảo mật và tính đúng đắn của kết quả}
+Nếu giải mã chat thất bại do sai khóa, sai thẻ hay sai AAD, server trả \texttt{SECURITY\_FAILED} rồi đóng phiên, không định tuyến tin và không ghi nội dung vào log. Chat không tự gửi lại; nếu thiếu xác nhận thì kết quả được coi là chưa xác định.
+
+Giao diện chỉ hiển thị “Đã gửi” sau khi nhận ACK và “Hoàn tất” sau khi nhận COMPLETE hợp lệ (mục 5.5). Lớp mã hóa không chứng minh người nhận đã đọc tin, nên giao diện không diễn giải ACK thành “đã đọc”.
+
+\subsection{Phạm vi kiểm chứng và giới hạn}
+Bộ kiểm thử bảo mật kiểm tra các trường hợp sai khóa, sai thẻ, sai AAD, nonce, replay và gửi lại, chứng thư và kết nối lại (số liệu chi tiết ở mục 8). Bản demo \texttt{/local-demo/} chạy ở chế độ mô phỏng, không chứa khóa hay kết nối thật, và không được dùng để kết luận về mã hóa.
+
+Các giới hạn cần ghi nhận:
+\begin{itemize}
+    \item Không phải E2EE; server và relay đọc được nội dung.
+    \item Chứng thư và CA là bản thử, tọa cục bộ và hết hạn sau 30 ngày; chưa có chứng thư công khai.
+    \item Chưa kiểm thử trên mạng LAN nhiều máy và chưa hardening cho môi trường công khai.
+    \item Chưa có khóa nhóm, cơ sở dữ liệu hay khả năng nối lại phiên (resume).
+\end{itemize}
