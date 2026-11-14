@@ -1,1 +1,7 @@
 \section{Giới thiệu}
+
+\subsection{Mục tiêu}
+Assignment 1 yêu cầu xây dựng một ứng dụng cộng tác theo mô hình client-server, cho phép nhiều người dùng đăng nhập, nhắn tin chung và riêng, truyền file và theo dõi người đang hoạt động qua giao diện Web. Nhóm đặt tên ứng dụng là \textbf{Connect}. Hệ thống gồm một server xử lý xác thực và định tuyến tin nhắn qua TCP/TLS, một UDP relay truyền file tin cậy, một lớp bảo mật mã hóa dữ liệu bằng AES-256-GCM, và một giao diện Web dùng HTML, CSS và JavaScript phía client.
+
+\subsection{Phạm vi và công nghệ}
+Hệ thống chạy trên Windows với Python 3.14, dùng socket của thư viện chuẩn cho TCP và UDP, module \texttt{ssl} cho TLS và thư viện \texttt{cryptography} cho AES-GCM. Theo ràng buộc của đề, nhóm không dùng Flask/Django, WebSocket hay thư viện mạng cấp cao, và không thêm framework mạng nào ngoài các thư viện kể trên. Phạm vi kiểm chứng là localhost; hệ thống chưa được kiểm thử trên mạng LAN nhiều máy.

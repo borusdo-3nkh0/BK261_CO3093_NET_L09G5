@@ -1,1 +1,6 @@
 \section{Kết luận}
+Nhóm đã xây dựng ứng dụng Connect với đầy đủ các chức năng chính của đề: đăng nhập và quản lý phiên, nhiều client đồng thời, chat chung và riêng, truyền file tin cậy qua UDP có kiểm tra SHA-256, xử lý lỗi và ngắt kết nối, mã hóa dữ liệu bằng TLS và AES-256-GCM, và giao diện Web hiển thị tin nhắn, người dùng online và tiến trình truyền file. Hệ thống được kiểm thử tự động với 188 test tích hợp, 23 test bảo mật, kiểm thử trình duyệt thật và các lượt chạy tải 10 và 20 client đồng thời, tất cả đều đạt.
+
+Quá trình làm việc cho thấy giá trị của kiểm thử tích hợp: hai lỗi khó thấy, lỗi đọc TLS khi nhiều client broadcast và lỗi FIN lặp chặn vòng nhận UDP, đều chỉ lộ ra khi các thành phần chạy cùng nhau trong tải đồng thời, và được xử lý kèm test hồi quy. Việc tách rõ xác nhận “đã gửi”, “hoàn tất” với trạng thái “chưa xác định kết quả” cũng giúp giao diện không báo thành công khi chưa có bằng chứng.
+
+Hệ thống vẫn còn những giới hạn đã nêu ở mục 9: không phải mã hóa đầu cuối, dữ liệu tài khoản chỉ nằm trong bộ nhớ và mới được kiểm thử trên localhost. Một số điểm mơ hồ trong đề (giao thức của chat, thuật toán điều khiển tắc nghẽn) cần được giảng viên làm rõ. Các hướng phát triển tiếp theo gồm lưu trữ bền vững, kiểm thử trên mạng LAN, xử lý file lớn và cải thiện bảo mật.
