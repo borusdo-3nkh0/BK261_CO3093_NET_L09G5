@@ -163,6 +163,24 @@ async function runMessageResultChecks() {
     assert($("send").disabled && calls.length === noMethodCount, "Missing sendMessage capability is safely disabled");
     adapter.sendMessage = sendMessage; ui.render(); type("   "); submit();
     assert(calls.length === noMethodCount, "Empty or whitespace-only content never calls the adapter");
+    const key = options => {
+      const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...options });
+      $("message-input").dispatchEvent(event); return event;
+    };
+    type("Đức đang soạn tiếng Việt có dấu"); const beforeKeys = calls.length;
+    assert(!key({ shiftKey: true }).defaultPrevented && calls.length === beforeKeys, "Shift+Enter keeps native newline behaviour without sending");
+    assert(!key({ isComposing: true }).defaultPrevented && calls.length === beforeKeys, "Enter during IME composition never sends");
+    assert(!key({ keyCode: 229 }).defaultPrevented && calls.length === beforeKeys, "IME commit key 229 never submits accidentally");
+    pending = deferred(); behavior = () => pending.promise;
+    assert(key({}).defaultPrevented && calls.length === beforeKeys + 1 && calls.at(-1).text === "Đức đang soạn tiếng Việt có dấu", "Enter submits Vietnamese text through the existing send path");
+    key({}); key({ repeat: true });
+    assert(calls.length === beforeKeys + 1 && $("send").disabled, "Enter and held Enter cannot duplicate a pending request");
+    pending.resolve(false); await tick(); behavior = () => true;
+    key({});
+    assert(calls.length === beforeKeys + 2 && $("message-input").value === "", "Enter can explicitly retry a rejected request without losing the draft");
+    type(" \n "); key({});
+    assert(calls.length === beforeKeys + 2, "Enter with whitespace-only content does not send");
+    assert(document.querySelector(".composer-footer").textContent.includes("Shift + Enter"), "Composer help describes the current keyboard shortcuts");
     await tick();
     assert(unexpected.length === 0, "Adapter exceptions and rejections never escape as unhandled browser errors");
     assert(document.documentElement.scrollWidth <= innerWidth, "Pending/error text preserves responsive layout");

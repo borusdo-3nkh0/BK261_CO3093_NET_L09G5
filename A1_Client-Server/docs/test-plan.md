@@ -1,5 +1,20 @@
 # Kế hoạch kiểm thử P3
 
+## Hai tiện ích UI, F5 tạm dừng — 2026-11-14
+
+Theo yêu cầu mới nhất, **chưa sửa F5** để người dùng nghiên cứu thêm. Không thay bridge, adapter, reducer, session/token hoặc cơ chế lưu phiên. Lượt này chỉ thêm nút mắt mật khẩu ở hộp LOGIN chính thức và phím Enter/Shift+Enter ở composer dùng chung chính thức/demo.
+
+Mật khẩu mặc định ẩn; nút type=button không submit, đổi nhãn truy cập Hiện/Ẩn mật khẩu và giữ giá trị. Mở lại hộp hoặc submit sẽ trở về trạng thái ẩn. Composer dùng requestSubmit để đi qua kiểm tra rỗng/Promise/chống gửi lặp và ACK hiện có; Shift+Enter giữ newline native, isComposing/keyCode 229 không gửi, held Enter không tự gửi lặp. Dòng hướng dẫn đã đổi. Demo không có ô mật khẩu, dùng lại composer mới; không thêm UI đăng nhập vào demo.
+
+| Kiểm tra thực chạy Windows/Python 3.14.4, Chrome | Kết quả |
+| --- | --- |
+| `p3.py check --suite independent ui --timeout 90`, `check-9c17f37939bd45a289a68eb8581b43d6` | **PASS** independent 18,776s, UI 6,639s; Python độc lập/Ruff/format/JS/helper đạt, audit 2 JSON đạt |
+| UI chính thức dùng test adapter | **242 assertion** mỗi 1440×900/1366×768/1100×750; **246** ở 390×844. Giữ mọi ca cũ, thêm 8 ca Enter/Shift/IME/repeat/retry/rỗng/hướng dẫn |
+| Demo qua cùng renderer | Giữ **33 smoke + 37 company** mỗi desktop/mobile; thêm thao tác phím native qua CDP: Shift+Enter xuống dòng, Enter gửi tiếng Việt và reset xác định đều đạt |
+| Hai Chrome với P2/relay/TLS thật | **PASS 45,421s**, `runtime/ui-utilities/check-6e6488d3725f41d49a4970f8f5ea6bca`. Nút mắt giữ đúng mật khẩu/nhãn, không submit; Enter gửi nội dung hai dòng có dấu đúng một lần; chat/file/online/offline/reconnect cũ vẫn đạt |
+
+IME được kiểm bằng KeyboardEvent.isComposing/keyCode 229 trong trình duyệt; không tuyên bố đã điều khiển bộ gõ Windows thực. Native Enter/Shift+Enter và nội dung Unicode được kiểm qua Chrome CDP. Bằng chứng runtime không commit. Không chạy lại load/file lớn trong lượt UI; các server localhost người dùng đang chạy được giữ nguyên. CI của bản sửa TLS ở mục dưới là lịch sử, không thay cho SHA tiện ích UI mới.
+
 ## Sửa đọc TLS / WinError 10035 — 2026-11-14
 
 Nhánh `handoff/p3-integrated-security-20261114`, base `e9f7e7916a19cf70edd8cd5ee10d62c07cf39d1a`. Đã đọc lại log run `check-e0f9bd47650f47ddb80b1584c4c53b5c`: 01:42:04,133, C09 bị đóng từ `receive_line` → `SSLSocket.read` sau `BlockingIOError 10035`, trong lúc các survivor broadcast. Điểm sai trong code: receiver và router có thể dùng cùng SSL object đồng thời; `send_locks` trước đó chỉ tuần tự hóa các writer. Không có bằng chứng rằng cần tăng timeout hoặc thay thuật toán truyền file.

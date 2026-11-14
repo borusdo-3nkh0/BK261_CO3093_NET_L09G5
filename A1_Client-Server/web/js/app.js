@@ -384,6 +384,11 @@ export async function mountUI({ adapter = null, mode = "live", conversations = [
     draftRevisions.set(selected, (draftRevisions.get(selected) ?? 0) + 1);
     updateComposer();
   });
+  $("message-input").addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (!event.repeat) $("message-form").requestSubmit();
+  });
   $("message-form").addEventListener("submit", event => {
     event.preventDefault();
     if (!canSend() || typeof adapter?.sendMessage !== "function" || messageRequests.has(selected) || !$("message-input").value.trim()) return;

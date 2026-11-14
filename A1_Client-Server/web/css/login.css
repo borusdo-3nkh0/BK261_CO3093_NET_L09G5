@@ -4,6 +4,12 @@
 #login-form h2 { font-size: 20px; margin: 0; }
 #login-form label { display: grid; gap: 6px; }
 #login-form input { width: 100%; min-width: 0; font: inherit; }
+.password-field { display: grid; gap: 6px; }
+.password-control { position: relative; }
+.password-control input { padding-right: 44px; }
+#password-toggle { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); }
+.eye-slash { display: none; }
+#password-toggle[aria-pressed="true"] .eye-slash { display: block; }
 #login-error { color: #a32632; margin: 0; overflow-wrap: anywhere; }
 .login-actions { display: flex; justify-content: flex-end; gap: 8px; }
 #login-open { flex-shrink: 0; }

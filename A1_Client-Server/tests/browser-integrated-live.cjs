@@ -52,6 +52,10 @@ async function browser(label) {
     throw new Error(label + " DOM timeout: " + expression); };
   client.click = selector => client.eval(`document.querySelector(${JSON.stringify(selector)}).click()`);
   client.type = async (id, text) => { await client.eval(`document.getElementById(${JSON.stringify(id)}).focus()`); await client.cdp("Input.insertText", { text }); };
+  client.enter = async (shift = false) => {
+    await client.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0, text: "\r", unmodifiedText: "\r" });
+    await client.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, modifiers: shift ? 8 : 0 });
+  };
   client.shot = async name => fs.writeFile(path.join(output, name), Buffer.from((await client.cdp("Page.captureScreenshot", { format: "png" })).data, "base64"));
   await client.cdp("Page.enable");
   await client.cdp("Emulation.setDeviceMetricsOverride", { width: label === "A" ? 1440 : 1100, height: label === "A" ? 900 : 750, deviceScaleFactor: 1, mobile: false });
@@ -66,6 +70,13 @@ async function login(client, username, password) {
   await client.click("#login-open");
   await client.eval("document.getElementById('login-username').value='';document.getElementById('login-password').value=''");
   await client.type("login-username", username); await client.type("login-password", password);
+  assert.equal(await client.eval("document.getElementById('login-password').type"), "password");
+  await client.click("#password-toggle");
+  assert.equal(await client.eval("document.getElementById('login-password').type==='text'&&document.getElementById('password-toggle').getAttribute('aria-label')==='Ẩn mật khẩu'&&document.getElementById('login-dialog').open"), true);
+  assert.equal(await client.eval("document.getElementById('login-password').value"), password);
+  await client.click("#password-toggle");
+  assert.equal(await client.eval("document.getElementById('login-password').type==='password'&&document.getElementById('password-toggle').getAttribute('aria-label')==='Hiện mật khẩu'&&!document.getElementById('login-submit').disabled"), true);
+  assert.equal(await client.eval("document.getElementById('login-password').value"), password);
   await client.click("#login-submit"); await client.until("document.getElementById('connection-state').textContent==='Đã kết nối'");
   await client.until("window.reviewEvents.some(e=>e.type==='files.changed'&&e.data.state==='ready')");
 }
@@ -134,6 +145,14 @@ async function main() {
   await login(a, users[0], password); await login(b, users[1], password);
   for (const [client, other] of [[a, users[1]], [b, users[0]]]) await client.until(`!!document.querySelector('#users [data-user-id="${other}"]')`);
   report.checks.push("two independent Chrome profiles login; real FILE_SESSION ready; both online");
+  await a.type("message-input", "Đức soạn tiếng Việt"); await a.enter(true);
+  await a.type("message-input", "Dòng thứ hai có dấu");
+  const keyboardText = "Đức soạn tiếng Việt\nDòng thứ hai có dấu";
+  assert.equal(await a.eval("document.getElementById('message-input').value"), keyboardText);
+  await a.enter();
+  await a.until("document.getElementById('message-input').value===''");
+  await b.until(`Array.from(document.querySelectorAll('.message-body')).filter(n=>n.textContent===${JSON.stringify(keyboardText)}).length===1`);
+  report.checks.push("password eye preserves input without submitting; native Shift+Enter adds newline and Enter sends Vietnamese text once");
   await message(a, b, "Kênh chung A → B " + runId); await message(b, a, "Kênh chung B → A " + runId);
   await privateChat(a, users[1]); await privateChat(b, users[0]);
   await message(a, b, "Tin riêng A → B " + runId); await message(b, a, "Tin riêng B → A " + runId);

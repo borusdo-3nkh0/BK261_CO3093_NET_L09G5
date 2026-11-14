@@ -163,7 +163,18 @@ async function main() {
       await cdp("Page.navigate", { url: base + "/local-demo/" }); await until("!!document.getElementById('scenario')");
       const smoke = await evaluate("(async()=>{" + demo + ";return await runBrowserChecks();})()"), extra = await evaluate("(async()=>{" + company + ";return await runCompanyChecks();})()");
       assert.ok(smoke.passed > 0 && extra.passed > 0, "Demo suites must execute checks");
-      report.demo.push({ viewport: [width, height], smoke, company: extra });
+      const demoText = "Đức thử demo\nTiếng Việt có dấu";
+      await evaluate("document.getElementById('message-input').focus()");
+      await cdp("Input.insertText", { text: "Đức thử demo" });
+      await cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, modifiers: 8, text: "\r", unmodifiedText: "\r" });
+      await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, modifiers: 8 });
+      await cdp("Input.insertText", { text: "Tiếng Việt có dấu" });
+      assert.equal(await evaluate("document.getElementById('message-input').value"), demoText);
+      await cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r" });
+      await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+      await until(`document.getElementById('message-input').value===''&&Array.from(document.querySelectorAll('.message-body')).some(n=>n.textContent===${JSON.stringify(demoText)})`);
+      await evaluate("document.getElementById('run').click();document.getElementById('step').click()");
+      report.demo.push({ viewport: [width, height], smoke, company: extra, keyboard: { shiftEnterNewline: true, enterSendsVietnamese: true } });
     }
   } catch (error) { throw new Error("Required demo checks failed: " + error.message); }
   report.completedAt = new Date().toISOString();
