@@ -202,9 +202,8 @@ Mỗi datagram là một gói hoàn chỉnh, các số nguyên theo thứ tự b
     \end{tabularx}
 \end{table}
 
+\vspace{-1.8em}
 Sau header là phần thân: \texttt{nonce} 12 byte, dữ liệu mã hóa (0 đến 996 byte), thẻ GCM 16 byte và thẻ HMAC 16 byte. Mỗi chunk file mang tối đa 996 byte dữ liệu gốc, nên một datagram DATA dài tối đa 1.084 byte, còn gói điều khiển rỗng chỉ 88 byte. Kích thước này được chọn thận trọng để giảm nguy cơ phân mảnh IP trên mạng LAN thông thường; nó không thay thế việc dò MTU của đường truyền. Ý nghĩa của nonce, thẻ GCM và HMAC được giải thích ở mục 6.
-
-
 
 Các loại thông điệp:
 
@@ -260,6 +259,6 @@ Mỗi lượt truyền file có hai máy trạng thái độc lập, một ở n
 Người gửi chỉ được coi là thành công sau khi nhận COMPLETE, không phải khi đã gửi xong hay đã được ACK hết chunk.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{Assets/file_transfer_sequence_diagram.png}
+    \includegraphics[width=\textwidth]{Assets/file_transfer_sequence_diagram.png}
     \caption{Trình tự truyền một file qua UDP relay}
 \end{figure}

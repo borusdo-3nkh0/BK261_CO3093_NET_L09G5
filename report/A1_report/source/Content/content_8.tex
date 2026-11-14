@@ -8,7 +8,7 @@ Toàn bộ kiểm thử được gom vào một bộ chạy tập trung \texttt{
     \item PASS chỉ khi nhóm được chọn thật sự chạy và hoàn tất.
     \item Mỗi lượt chạy có UUID riêng và lưu báo cáo JSON, log, JUnit và ảnh chụp trình duyệt, dữ liệu nhạy cảm (khóa, ticket) được loại khỏi báo cáo.
     \item Có thời hạn tổng cho mỗi lượt, và Windows Job Object dọn toàn bộ cây tiến trình do lượt chạy tạo ra.
-    \item Kiểm thử dùng cổng ngẫu nhiên do hệ điều hành cấp, không dừng bất kỳ triến trình nào có sẵn trên máy.
+    \item Kiểm thử dùng cổng ngẫu nhiên do hệ điều hành cấp, không dừng tiến trình nào có sẵn.
 \end{itemize}
 
 Quy trình CI trên GitHub Actions chạy trên Windows với Python 3.14.

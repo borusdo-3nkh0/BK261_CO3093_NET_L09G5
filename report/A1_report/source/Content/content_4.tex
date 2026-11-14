@@ -5,8 +5,6 @@ Server lắng nghe TCP trên cổng 5000 (mặc định, cấu hình qua \texttt
 
 Sau handshake, mỗi thông điệp là một đối tượng JSON mã hóa UTF-8, kết thúc bằng ký tự xuống dòng (LF). Server đọc theo từng dòng với deadline tính cho cả dòng, nên một thông điệp bị chia nhỏ qua nhiều lần \texttt{recv} vẫn được ghép đúng.
 
-HÌNH 4.1
-
 \subsection{Xác thực và quản lý phiên}
 Tài khoản được \texttt{AuthManager} lưu trong trên bộ nhớ (RAM) dưới dạng từ điển (dictionary \texttt{self.users}) có khóa bảo vệ (lock). Mật khẩu không được lưu dạng thô mà được băm bằng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên. Log của server chỉ ghi tên người dùng, không ghi mật khẩu.
 
