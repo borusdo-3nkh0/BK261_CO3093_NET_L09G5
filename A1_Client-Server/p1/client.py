@@ -112,10 +112,15 @@ class _ReceiveState:
             return True
 
     def begin_verification(self):
-        with self.lock:
+        # A repeated FIN must not stall UDP receipt while verify/fsync holds the lock.
+        if not self.lock.acquire(blocking=False):
+            return False
+        try:
             if self.phase == "RECEIVING" and self.count == self.offer.total_chunks:
                 self.phase = "VERIFYING"
                 return True
+        finally:
+            self.lock.release()
         return False
 
     def verify(self, stopped):

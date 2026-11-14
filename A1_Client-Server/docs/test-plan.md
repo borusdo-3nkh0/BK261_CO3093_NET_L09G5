@@ -1,5 +1,24 @@
 # Kế hoạch kiểm thử P3
 
+## FIN lặp không chặn vòng nhận UDP — 2026-11-14
+
+PR #3 từng FAIL tại `test_bidirectional_concurrent_files_and_same_names` với `FIN retry limit exceeded` trong run `43558838159`. Lượt chẩn đoán riêng Windows/Python 3.14.10, run [43562061593](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43562061593), giữ nguyên retry/timeout/assertion: **20/20 lượt đạt, 80 transfer**, chưa tái hiện FAIL cũ. Tuy nhiên timeline đo được FIN lặp gọi `begin_verification()` chờ lock của worker verify/fsync **260,230 ms**; COMPLETE thật của transfer ngược chiều đã qua relay nhưng client xử lý muộn **179,347 ms**. Relay vẫn ở trạng thái COMPLETED đúng. Đây là điểm chặn đã đo được, chưa phải bằng chứng xác định toàn bộ nguyên nhân FAIL cũ.
+
+Bản sửa chỉ đổi `p1/client.py:_ReceiveState.begin_verification()` sang lấy lock không chặn; lock bận thì bỏ qua FIN đó để vòng nhận tiếp tục. Kiểm tra phase/đủ chunk vẫn trong lock. Worker vẫn kiểm size/hash, fsync và lưu thành công trước khi công bố file/gửi COMPLETE. Không đổi retry, timeout, pacing hoặc thuật toán truyền.
+
+Test mới `test_duplicate_fin_does_not_block_other_transfer_complete` dùng hai transfer/UDP thật: relay giữ COMPLETE đã verify của transfer ngược chiều; worker verify của transfer còn lại giữ lock bằng barrier hữu hạn. Sau khi FIN lặp đến, thả COMPLETE và kiểm client xử lý nó **trước khi thả worker**. Transfer còn giữ worker chưa được báo thành công; sau thả, cả hai file đúng bytes. Barrier được nhả trong finally, không giữ thread vô hạn. Chạy lại logic khóa chặn cũ trong process test riêng cho **FAIL đúng assertion COMPLETE bị chặn**; logic mới PASS.
+
+| Kiểm tra Windows/Python 3.14.4 | Kết quả thực chạy |
+| --- | --- |
+| Regression có kiểm soát, `runtime/fin-fix-exact-regression/check-d25876ffe8914c9ab60d017102848273` | Logic cũ FAIL như dự kiến; logic mới **1 passed**, 0 skip, 0,860s |
+| P1 cùng checkout: protocol, CLI, UDP transfer | **36 passed**, 0 skip, 15,354s; `runtime/fin-fix-p1/check-5a713fb0eb2943028d26e129ab9567e5/` |
+| Integrated Python + hai Chrome/P2/relay thật | **188 passed, 58 subtest**, 0 skip; 3 large/load deselected có chủ ý. Suite 166,277s, browser 40,305s; chat/file hai chiều, hash, ACK, online/offline/reconnect và ngắt DATA/FIN/COMPLETE đạt |
+| Security Python + HTTPS/browser | **23 passed**, 0 skip, suite 51,551s; key/tag/AAD, nonce/replay/retry, chứng thư và thu hồi phiên đạt |
+| Run `check-4ead31cf49d045be85fddfe8de54d3c6` | **PASS 217,873s**, audit 4 JSON PASS; source `099b943` + tracked changes lúc chạy, P1/P2/P3 cùng checkout |
+| Ruff check/format, diff, encoding tài liệu | **PASS**; không thêm dependency, runtime hoặc bí mật vào diff |
+
+Chạy lại: `python -B -m pytest -q tests/test_udp_transfer.py::TransferTests::test_duplicate_fin_does_not_block_other_transfer_complete`; P1 hiện tại: `python -B -m pytest -q tests/test_protocol.py tests/test_cli.py tests/test_udp_transfer.py`; tích hợp: `python -B p3.py check --suite integrated security --timeout 360`. Report/JUnit/log ở runtime không commit; log chẩn đoán không chứa key, ticket hoặc nội dung file. CI cần đối chiếu SHA sau push lên nhánh handoff, không dùng run chẩn đoán thay cho nghiệm thu bản sửa. Không sửa F5 hoặc ca 256 MiB; FAIL 256 MiB do timeout 300 giây vẫn là đầu việc riêng.
+
 ## Hai tiện ích UI, F5 tạm dừng — 2026-11-14
 
 Theo yêu cầu mới nhất, **chưa sửa F5** để người dùng nghiên cứu thêm. Không thay bridge, adapter, reducer, session/token hoặc cơ chế lưu phiên. Lượt này chỉ thêm nút mắt mật khẩu ở hộp LOGIN chính thức và phím Enter/Shift+Enter ở composer dùng chung chính thức/demo.

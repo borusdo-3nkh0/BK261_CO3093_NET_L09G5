@@ -44,6 +44,8 @@ Với trang chính thức, chạy server và bridge theo README; đăng ký hai 
 
 ## Kết quả và giới hạn
 
+Sửa FIN lặp: `begin_verification()` lấy lock không chặn để worker verify/fsync không giữ vòng nhận UDP. Kiểm tra phase/chunk và điều kiện COMPLETE sau verify/lưu thành công giữ nguyên; không đổi retry/timeout. Regression giữ worker bằng barrier và chuyển COMPLETE thật của transfer khác: logic cũ FAIL, bản sửa PASS; P1 cùng checkout 36/36 đạt. Integrated 188 test/58 subtest + hai Chrome và security 23 test + HTTPS/browser đều PASS, run `check-4ead31cf49d045be85fddfe8de54d3c6`. Đây là sửa điểm chặn đã đo được trong CI chẩn đoán, **chưa khẳng định tái hiện nguyên nhân FAIL cũ**. Chi tiết/lệnh chạy ở mốc FIN đầu test-plan.
+
 Kết quả 6 việc, run ID, thời gian và lỗi production xem mốc mới đầu [test-plan.md](test-plan.md). [Review đầu](review-main-20261113.md) giữ bằng chứng trước khi chỉnh runner; lịch sử IT/Mxx vẫn ở test-plan. Không hiểu số test lịch sử là kết quả phiên bản mới.
 
 File 32 MiB đạt hash/cleanup; 256 MiB admission đạt nhưng **truyền trọn 256 MiB FAIL do timeout gửi 300 giây**. Không thay đổi production để làm test đạt; chưa có file hoàn tất để đối chiếu hash của ca 256 MiB.
