@@ -86,6 +86,7 @@ export function applyEvent(state, event) {
         (data.totalBytes === null || (byteOK(data.totalBytes) && data.transferredBytes <= data.totalBytes)));
       requireData(data.downloadAvailable === undefined || (typeof data.downloadAvailable === "boolean" &&
         (!data.downloadAvailable || (data.status === "completed" && data.recipientId === state.connection.selfUserId))));
+      requireData(data.sendPending === undefined || typeof data.sendPending === "boolean");
       requireData(!old || (old.totalBytes === data.totalBytes && data.transferredBytes >= old.transferredBytes));
       requireData(data.status !== "completed" || (data.totalBytes !== null && data.totalBytes === data.transferredBytes));
     }

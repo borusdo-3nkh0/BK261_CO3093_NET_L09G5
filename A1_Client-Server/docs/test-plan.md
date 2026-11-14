@@ -1,5 +1,19 @@
 # Kế hoạch kiểm thử P3
 
+## Hết hạn chờ Accept — kiểm tra tập trung local, 2026-11-14
+
+Không chạy full suite/CI hoặc điều tra lỗi CI cũ. Không sửa protocol, retry, timeout hay dependency P1/P2. Giữ các thay đổi diagnostics local từ trước ngoài phạm vi lượt này.
+
+| Nhóm | Thao tác / tiêu chí | Kết quả thực chạy |
+| --- | --- | --- |
+| Bridge P3 | Test file bridge hiện có + lỗi OFFER/FIN/DATA/deadline, incoming expiry/SENDER_FAILED, early done khi worker còn sống, cleanup rồi gửi file mới | 33 PASS trong lượt chạy `tests/test_file_bridge.py`; cùng lượt có 1 test P1 mới lỗi fixture truyền trùng tham số name, không phải lỗi sản phẩm |
+| P1 UDP v2 thật + FileService P3 | Giữ nguyên retry loop, điều khiển Condition.wait_for chỉ ở bước OFFER để không chờ dài; B nhận offer thật nhưng không Accept. Xác nhận lỗi sender đúng OFFER retry limit exceeded, không có DATA; recipient nhận SENDER_FAILED. Sau đó file mới trong cùng hai phiên được Accept, COMPLETE và download/hash đúng | Sửa fixture name, chạy lại riêng `tests/test_accept_timeout.py`: 1 PASS, 0,58s. Staging/quota gửi cũ được dọn, thẻ/record failed cũ giữ nguyên |
+| Browser UI chính thức | Chạy nguyên `runFileUIChecks` và `runFileServiceChecks` bằng test adapter, tại 1440×900 và 1100×750; không chạy demo/các suite UI khác. Kiểm thông báo, nút khi worker pending/đã thoát, file mới, thẻ cũ, reject/completed/unknown và thiếu metadata | PASS: 38 + 20 assertion mỗi viewport, tách khỏi số pytest test. Node report 1,325s, process 1,451s; `runtime/accept-ui/check-a91066ca3cec46edabe35e7ed3059910/browser/browser-50c200ec-df4e-496e-90e2-fa713a0bbe96/report.json` |
+
+Ca P1 thật ở đây dùng relay/ticket v2 do fixture P1 trong cùng checkout cấp, không phải FILE_SESSION/P2/TLS/browser tích hợp thật. Browser dùng event giả trong tests, không local-demo. Chưa nghiệm thu hết hạn Accept qua hai Web client/P2 thật; không gọi ca này là IT end-to-end. Phía nhận chỉ có SENDER_FAILED vẫn hiện lỗi chung; không giả rằng đã biết sender hết hạn Accept. Test incoming TRANSFER_EXPIRED trước/sau Accept phân biệt trường hợp đủ/thiếu căn cứ.
+
+Lệnh Python đã chạy: `.\.venv\Scripts\python.exe -B -m pytest -q tests/test_file_bridge.py tests/test_accept_timeout.py`, sau sửa fixture chỉ chạy lại `.\.venv\Scripts\python.exe -B -m pytest -q tests/test_accept_timeout.py`. Driver browser tập trung tái dùng `tests/browser-file-live.cjs` tại `runtime/accept-ui/.../focused.cjs`; assertion trong hai file test được giữ đầy đủ. Log/report/runtime không đưa vào Git. Các kết quả bên dưới là lịch sử riêng.
+
 ## CI 212bfe1: notification close cũ xóa password mới — 2026-11-14
 
 Đã tải artifact `14106993859` của [run Windows 43578212977](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43578212977), đọc integrated-browser.log/report.json và xem failure-0.png/failure-1.png. Assertion FAIL là `assert.equal(await client.eval("document.getElementById('login-password').value"), password)` trong helper login (hai lần kiểm hiện/ẩn tại dòng 80/83 của 212bfe1): actual chuỗi rỗng, expected password fixture. Log gốc không lưu stack/nhãn riêng để phân biệt hai dòng; ảnh A đang mở LOGIN và mắt ở chế độ hiện phù hợp với assertion sau nút Hiện. B chưa LOGIN; chưa đến các ca chat/file của browser. Không có assertion nhãn Security trong runner integrated này. Independent 120 test, integrated Python 188 test và security 25 test + browser đều PASS; integrated-browser mới là bước FAIL. Không kết luận WinError 10053 trên idle HTTP là nguyên nhân xóa input.

@@ -51,6 +51,12 @@ async function runFileServiceChecks() {
     assert(ui.state.transfers.get("reject").status === "awaiting_acceptance", "Reject acceptance waits for event");
     emit("transfer.upsert", { ...reject, revision: 2, status: "rejected" });
     assert(document.querySelector('[data-transfer-id="reject"]').textContent.includes("Đã từ chối"), "Rejected event has clear terminal label");
+    const expired = { ...transfer, transferId: "expired-offer" };
+    emit("transfer.upsert", expired);
+    const timeoutText = "Thất bại — hết thời gian chờ người nhận chấp nhận.";
+    emit("transfer.upsert", { ...expired, revision: 2, status: "failed", error: { code: "ACCEPT_TIMEOUT", userMessage: timeoutText } });
+    const expiredCard = document.querySelector('[data-transfer-id="expired-offer"]');
+    assert(expiredCard.querySelector('.transfer-status').textContent === timeoutText && !expiredCard.querySelector('button'), "Confirmed incoming offer expiry shows its cause and removes stale decisions");
     emit("transfer.upsert", { ...transfer, transferId: "outgoing", senderId: "a", recipientId: "b", status: "queued" });
     assert(!document.querySelector('[data-transfer-id="outgoing"] button'), "Outgoing queue never offers receive decisions");
     emit("transfer.upsert", { ...transfer, transferId: "pending" });

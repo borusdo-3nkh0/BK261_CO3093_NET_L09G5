@@ -1,5 +1,13 @@
 # Giao diện giữa UI và adapter
 
+## Vòng đời gửi file — mở rộng nội bộ P3 local, 2026-11-14
+
+`transfer.upsert` có thể có `sendPending: boolean` (tùy chọn; adapter cũ/demo không cần thêm). Bridge chính thức luôn gửi trường này: true khi file gửi còn queued/worker chưa kết thúc, false sau khi worker đã thoát và file tạm/quota đã được dọn; file nhận dùng false. Reducer kiểm tra kiểu boolean. Đây không phải ACK/COMPLETE hoặc đặc tả protocol mạng.
+
+UI không mở nút chọn/gửi mới khi sendPending còn true, kể cả có terminal status đến sớm. Khi false, failed/rejected/completed cho chọn file mới; unknown cho chọn file mới nhưng giữ nhãn và thẻ unknown, không tự gửi lại file cũ. Unknown không có metadata xác nhận worker đã hết vẫn giữ khóa như trước. Chọn file mới tạo context/request/transfer ID mới trong cùng cuộc chat, không xóa thẻ cũ.
+
+`failed` với `error.code = ACCEPT_TIMEOUT` hiển thị nguyên `error.userMessage`: **Thất bại — hết thời gian chờ người nhận chấp nhận.** Chỉ bridge phân loại khi có đủ lỗi/phase từ P1; không dựa vào 0% trên UI. SENDER_FAILED đơn lẻ không đủ kết luận nguyên nhân này.
+
 ## Đăng ký trên adapter chính thức — 2026-11-14
 
 `createP2Adapter.register({username, password})` trả Promise chứa `{status: "REGISTER_SUCCESS" | "REGISTER_FAILED"}` từ POST HTTPS `/api/register`; lỗi HTTP/network reject Promise. Không phát connection.changed, không thay phiên hiện tại và không tự connect. Hộp tài khoản kiểm xác nhận password ở UI (không gửi trường này sang P2), chặn submit lặp, thông báo cố định và xóa mật khẩu. Chỉ sau người dùng LOGIN mới tạo phiên/context và các event hiện có. Đây là API nội bộ P3, không thêm packet/status P2; mock/demo không có tính năng tài khoản. Security hiện hành đã tích hợp TLS/AES-GCM theo README; các mốc draft/“UI chỉ LOGIN” phía dưới là lịch sử.

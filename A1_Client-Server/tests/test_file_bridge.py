@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from bridge import BridgeServer, Session, read_line
-from bridge_files import MAX_FILE, FileService
+from bridge_files import ACCEPT_TIMEOUT, MAX_FILE, FileService
 
 
 def wait(predicate, timeout=5):
@@ -198,6 +198,148 @@ def test_missing_final_confirmation_is_unknown_not_completed(service):
     wait(lambda: files.records[meta["transferId"]]["data"]["status"] == "unknown")
     wait(lambda: files.active is None)
     assert files.used_bytes == 0 and not list(files.root.glob("upload-*"))
+    assert files.records[meta["transferId"]]["data"]["sendPending"] is False
+
+
+def test_accept_timeout_waits_for_worker_exit_then_allows_next_file(service):
+    files, _ = service
+    release = threading.Event()
+    original = files.client.send_file
+
+    def timeout_after_event(path, recipient):
+        wire = str(uuid.uuid4())
+        files.client.calls.append((wire, Path(path).read_bytes()))
+        files.client.events.put(
+            dict(
+                type="file_sending",
+                transfer_id=wire,
+                filename=Path(path).name,
+                recipient=recipient,
+                size=1,
+            )
+        )
+        files.client.events.put(
+            dict(
+                type="file_failed",
+                transfer_id=wire,
+                reason="OFFER retry limit exceeded",
+            )
+        )
+        assert release.wait(3)
+        raise RuntimeError("OFFER retry limit exceeded")
+
+    files.client.send_file = timeout_after_event
+    first, second = metadata(), metadata()
+    try:
+        files.upload(first, 1, io.BytesIO(b"a"))
+        wait(lambda: files.active and files.active.get("failure_reason"))
+        files.active[
+            "done"
+        ].set()  # Even an early done signal cannot release a live worker.
+        files.upload(second, 1, io.BytesIO(b"b"))
+        time.sleep(0.05)
+        data = files.records[first["transferId"]]["data"]
+        assert files.worker.is_alive() and len(files.client.calls) == 1
+        assert data["status"] == "awaiting_acceptance" and data["sendPending"] is True
+        files.client.send_file = original
+        files.client.release.set()
+        release.set()
+        wait(
+            lambda: files.records[second["transferId"]]["data"]["status"] == "completed"
+        )
+        assert data["status"] == "failed" and data["sendPending"] is False
+        assert data["error"] == {
+            "code": "ACCEPT_TIMEOUT",
+            "userMessage": ACCEPT_TIMEOUT,
+        }
+        assert data["transferredBytes"] == 0
+        assert files.used_bytes == 0 and not list(files.root.glob("upload-*"))
+    finally:
+        release.set()
+
+
+@pytest.mark.parametrize(
+    "reason,progress,expected",
+    [
+        ("OFFER retry limit exceeded", None, "failed"),
+        ("OFFER retry limit exceeded", 0, "unknown"),
+        ("FIN retry limit exceeded", 1, "unknown"),
+        ("DATA retry limit exceeded", 0, "unknown"),
+        ("Transfer deadline exceeded", None, "unknown"),
+    ],
+)
+def test_send_failure_classification_uses_p1_reason_and_phase(
+    service, reason, progress, expected
+):
+    files, _ = service
+
+    def fail(path, recipient):
+        wire = str(uuid.uuid4())
+        files.client.events.put(
+            dict(
+                type="file_sending",
+                transfer_id=wire,
+                filename=Path(path).name,
+                recipient=recipient,
+                size=1,
+            )
+        )
+        if progress is not None:
+            files.client.events.put(
+                dict(
+                    type="file_progress",
+                    transfer_id=wire,
+                    direction="send",
+                    bytes=progress,
+                    total=1,
+                )
+            )
+        files.client.events.put(
+            dict(type="file_failed", transfer_id=wire, reason=reason)
+        )
+        raise RuntimeError(reason)
+
+    files.client.send_file = fail
+    meta = metadata()
+    files.upload(meta, 1, io.BytesIO(b"x"))
+    wait(lambda: files.records[meta["transferId"]]["data"]["status"] == expected)
+    data = files.records[meta["transferId"]]["data"]
+    assert data["sendPending"] is False and files.active is None
+    assert (data["error"]["code"] == "ACCEPT_TIMEOUT") == (expected == "failed")
+
+
+@pytest.mark.parametrize(
+    "reason,accepted,code",
+    [
+        ("TRANSFER_EXPIRED", False, "ACCEPT_TIMEOUT"),
+        ("SENDER_FAILED", False, "FILE_FAILED"),
+        ("TRANSFER_EXPIRED", True, "FILE_FAILED"),
+    ],
+)
+def test_receiver_does_not_invent_sender_accept_timeout(
+    service, reason, accepted, code
+):
+    files, _ = service
+    wire = str(uuid.uuid4())
+    with files.lock:
+        files._event(
+            dict(
+                type="file_offer",
+                transfer_id=wire,
+                sender="bob",
+                filename="wait.bin",
+                size=1,
+                sha256="a" * 64,
+            )
+        )
+        if accepted:
+            files.decide(wire, True)
+        files._event(dict(type="file_failed", transfer_id=wire, reason=reason))
+    data = files.records[wire]["data"]
+    assert data["status"] == "failed" and data["error"]["code"] == code
+    if code == "ACCEPT_TIMEOUT":
+        assert data["error"]["userMessage"] == ACCEPT_TIMEOUT
+    assert files.used_bytes == 0
 
 
 @pytest.mark.parametrize(

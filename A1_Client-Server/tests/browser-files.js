@@ -91,6 +91,35 @@ async function runFileUIChecks() {
     emit("operation.failed", { requestId: request.requestId, code: "TEST_LATE", userMessage: "Lỗi tiếp nhận đến muộn trong test." });
     assert($("file-selection").textContent.includes("Hoàn tất"), "Late acceptance error cannot undo confirmed completion");
 
+    const timeoutText = "Thất bại — hết thời gian chờ người nhận chấp nhận.";
+    pick(file); submit(); await tick();
+    const expiredRequest = calls.at(-1);
+    const expired = { ...transfer, transferId: expiredRequest.transferId, revision: 1,
+      transferredBytes: 0, status: "awaiting_acceptance", sendPending: true };
+    emit("transfer.upsert", expired);
+    emit("transfer.upsert", { ...expired, revision: 2, status: "failed",
+      error: { code: "ACCEPT_TIMEOUT", userMessage: timeoutText } });
+    assert($("attach-file").disabled && $("send-file").disabled, "Terminal status cannot unlock while the old worker is still pending");
+    emit("transfer.upsert", { ...expired, revision: 3, status: "failed", sendPending: false,
+      error: { code: "ACCEPT_TIMEOUT", userMessage: timeoutText } });
+    const expiredCard = () => document.querySelector(`[data-transfer-id="${expired.transferId}"]`);
+    assert(expiredCard().querySelector('.transfer-status').textContent === timeoutText && $("file-selection").textContent.includes(timeoutText), "Confirmed offer timeout has the exact failure explanation");
+    assert(!$("attach-file").disabled && !$("file-input").disabled, "Finished worker releases the picker without login");
+    pick(new File(["new"], "file-moi.txt")); submit(); await tick();
+    const nextRequest = calls.at(-1);
+    assert(nextRequest.transferId !== expired.transferId, "New file gets a new transfer identity in the same conversation");
+    const next = { ...transfer, transferId: nextRequest.transferId, revision: 1, fileName: "file-moi.txt", totalBytes: 3, transferredBytes: 3, sendPending: true };
+    emit("transfer.upsert", next);
+    emit("transfer.upsert", { ...next, revision: 2, status: "completed", sendPending: false });
+    assert($("file-selection").textContent.includes("Hoàn tất") && expiredCard().querySelector('.transfer-status').textContent === timeoutText, "New completion preserves the old failed card");
+    pick(file); submit(); await tick();
+    const uncertain = { ...transfer, transferId: calls.at(-1).transferId, revision: 1, status: "unknown", sendPending: true };
+    emit("transfer.upsert", uncertain);
+    assert($("attach-file").disabled, "Unknown result does not release a live worker");
+    emit("transfer.upsert", { ...uncertain, revision: 2, sendPending: false });
+    assert(!$("attach-file").disabled && $("send-file").disabled && $("file-selection").textContent.includes("Chưa xác định kết quả"), "Finished unknown operation allows a new selection without blindly resending the old file");
+    assert(ui.state.transfers.get(uncertain.transferId).status === "unknown", "Worker cleanup never converts unknown to failed or completed");
+
     pick(file); behavior = () => false; submit(); await tick();
     assert($("error").textContent.includes("chưa được tiếp nhận") && !$("file-selection").textContent.includes("Hoàn tất"), "Adapter rejection is not success");
     behavior = () => { throw new Error("internal adapter details"); }; submit(); await tick();
