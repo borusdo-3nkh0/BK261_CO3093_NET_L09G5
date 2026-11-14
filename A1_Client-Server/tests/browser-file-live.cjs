@@ -78,8 +78,8 @@ async function main() {
   await until(`Array.from(document.querySelectorAll('#users li')).some(n=>n.dataset.userId===${JSON.stringify(b)})`);
   await until("!document.getElementById('file-selection').textContent.includes('Đang chuẩn bị')");
   if (config.backend === "security") {
-    await until("document.getElementById('security-state')?.textContent.includes('TLS đã xác minh')");
-    await until("document.getElementById('security-state')?.textContent.includes('File AES-GCM')");
+    assert.equal(await evaluate("document.getElementById('security-state')===null"), true, "No technical security label in the UI");
+    await until("document.getElementById('notice').textContent==='Sẵn sàng chia sẻ file.'");
     report.security = { https: true, p2VerifiedTLS: true, headlessCertificatePin: true, aesChatAndFile: true };
   }
   await click("#new-chat"); await type("user-search", b); await click("#known-users button");
