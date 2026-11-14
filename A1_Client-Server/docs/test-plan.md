@@ -1,5 +1,15 @@
 # Kế hoạch kiểm thử P3
 
+## CI 212bfe1: notification close cũ xóa password mới — 2026-11-14
+
+Đã tải artifact `14106993859` của [run Windows 43578212977](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43578212977), đọc integrated-browser.log/report.json và xem failure-0.png/failure-1.png. Assertion FAIL là `assert.equal(await client.eval("document.getElementById('login-password').value"), password)` trong helper login (hai lần kiểm hiện/ẩn tại dòng 80/83 của 212bfe1): actual chuỗi rỗng, expected password fixture. Log gốc không lưu stack/nhãn riêng để phân biệt hai dòng; ảnh A đang mở LOGIN và mắt ở chế độ hiện phù hợp với assertion sau nút Hiện. B chưa LOGIN; chưa đến các ca chat/file của browser. Không có assertion nhãn Security trong runner integrated này. Independent 120 test, integrated Python 188 test và security 25 test + browser đều PASS; integrated-browser mới là bước FAIL. Không kết luận WinError 10053 trên idle HTTP là nguyên nhân xóa input.
+
+Vòng đời có lỗi: close notification được xếp hàng; handler close gọi clearPasswords vô điều kiện, kể cả sau khi đã mở lại hộp và nhập password mới. Regression giữ hai close notification thật từ Đóng/Escape, chờ chúng đến, rồi phát lại sau khi nhập password ở lần LOGIN kế. Bản cũ **FAIL có kiểm soát** tại `Delayed close must not clear a reopened login`, run `runtime/late-close-red/check-6c501ee624544f19878f9118822ad9c7/`. Không chạy lặp CI để lấy xanh hoặc nới timeout/assertion.
+
+Bản sửa một điều kiện ở `web/js/main.js`: handler close chỉ dọn nếu `!dialog.open`; thao tác Đóng/cancel/submit/đổi mode vẫn xóa ngay. Giữ toàn bộ kiểm tra nút mắt và thêm nhãn lỗi riêng; giữ kiểm tra không có nhãn kỹ thuật trong browser security. Không sửa TLS/AES-GCM, protocol, bridge, FIN hoặc F5. Sau sửa **browser tích hợp PASS 41,258s**, `runtime/late-close-fixed/check-7f2e1fed6ed344d396bad1c315d78dd4/`, với P2/relay/TLS thật, đăng ký/login/chat chung-riêng, file hai chiều/hash, online/offline/reconnect. Artifact/ảnh nằm dưới runtime, không commit dữ liệu tạm hoặc bí mật; CI bản sửa được đối chiếu theo SHA push tiếp theo.
+
+`python -B p3.py check --suite ui security --timeout 180` sau sửa: **PASS 73,396s**, run `check-e4cba360fa34406781b40210e33f0669`; UI/demo 6,471s, security 25 Python test không skip + HTTPS/browser 66,873s, audit 4 JSON PASS. JS syntax, diff và UTF-8 đạt. Không chạy lại CI cũ để lấy xanh; không chạy load/file lớn hoặc sửa thời hạn truyền. Các suite Python không đổi khác được CI mặc định của commit mới kiểm tra.
+
 ## Đăng ký tài khoản từ Web — 2026-11-14
 
 Đối chiếu `server/auth_manager.py`, `client_handler.py` và `socket_server.py`: username là chuỗi có ký tự không phải khoảng trắng; password là chuỗi không rỗng. P2 trả REGISTER_SUCCESS hoặc REGISTER_FAILED; sau validation trên, REGISTER_FAILED nghĩa là username đã tồn tại. Không thêm chính sách password hay sửa protocol/P2. Account/hash vẫn chỉ trong RAM P2, mất khi restart.

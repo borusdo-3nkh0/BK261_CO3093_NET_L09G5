@@ -74,13 +74,16 @@ async function login(client, username, password) {
   await client.click("#login-open");
   await client.eval("document.getElementById('login-username').value='';document.getElementById('login-password').value=''");
   await client.type("login-username", username); await client.type("login-password", password);
+  // Release previous close notifications after entering the next login password.
+  await client.eval("for(const event of window.heldCloseEvents??[])document.getElementById('login-dialog').dispatchEvent(event);delete window.heldCloseEvents");
+  assert.equal(await client.eval("document.getElementById('login-password').value"), password, "Delayed close must not clear a reopened login");
   assert.equal(await client.eval("document.getElementById('login-password').type"), "password");
   await client.click("#password-toggle");
   assert.equal(await client.eval("document.getElementById('login-password').type==='text'&&document.getElementById('password-toggle').getAttribute('aria-label')==='Ẩn mật khẩu'&&document.getElementById('login-dialog').open"), true);
-  assert.equal(await client.eval("document.getElementById('login-password').value"), password);
+  assert.equal(await client.eval("document.getElementById('login-password').value"), password, "Showing password preserves input");
   await client.click("#password-toggle");
   assert.equal(await client.eval("document.getElementById('login-password').type==='password'&&document.getElementById('password-toggle').getAttribute('aria-label')==='Hiện mật khẩu'&&!document.getElementById('login-submit').disabled"), true);
-  assert.equal(await client.eval("document.getElementById('login-password').value"), password);
+  assert.equal(await client.eval("document.getElementById('login-password').value"), password, "Hiding password preserves input");
   await client.click("#login-submit"); await client.until("document.getElementById('connection-state').textContent==='Đã kết nối'");
   await client.until("window.reviewEvents.some(e=>e.type==='files.changed'&&e.data.state==='ready')");
 }
@@ -119,13 +122,14 @@ async function registration(client, username, password) {
   await fill(username); await client.click("#account-mode");
   assert.equal(await client.eval(emptyPasswords), true, "Mode switch clears credentials");
   // Hold the queued close event: credentials must already be cleared by the action.
-  await client.eval("window.holdClose=event=>event.stopImmediatePropagation();document.getElementById('login-dialog').addEventListener('close',window.holdClose,true)");
+  await client.eval("window.heldCloseEvents=[];window.holdClose=event=>{event.stopImmediatePropagation();window.heldCloseEvents.push(event)};document.getElementById('login-dialog').addEventListener('close',window.holdClose,true)");
   await client.type("login-password", password); await client.click("#login-close");
   assert.equal(await client.eval(emptyPasswords), true, "Closing the dialog clears credentials");
   await client.click("#login-open"); await client.type("login-password", password);
   await client.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await client.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   assert.equal(await client.eval(`!document.getElementById('login-dialog').open&&(${emptyPasswords})`), true, "Escape clears credentials before close notification");
+  await client.until("window.heldCloseEvents.length===2");
   await client.eval("document.getElementById('login-dialog').removeEventListener('close',window.holdClose,true);delete window.holdClose");
   assert.equal(await client.eval("location.search===''&&localStorage.length===0&&sessionStorage.length===0"), true);
   report.checks.push("real HTTPS/TLS REGISTER: mismatch and invalid input, duplicate username, pending submit guard, password cleanup, success returns to LOGIN without auto-login or browser storage");

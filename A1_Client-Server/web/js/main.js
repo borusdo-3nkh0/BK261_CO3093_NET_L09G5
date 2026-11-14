@@ -54,7 +54,7 @@ async function start() {
   button.addEventListener("click", () => { setMode(false); dialog.showModal(); $("login-username").focus(); });
   $("login-close").addEventListener("click", () => { clearPasswords(); dialog.close(); });
   dialog.addEventListener("cancel", clearPasswords);
-  dialog.addEventListener("close", clearPasswords);
+  dialog.addEventListener("close", () => { if (!dialog.open) clearPasswords(); });
   adapter.subscribe(event => {
     if (event.type === "connection.changed") {
       button.hidden = event.data.state === "connected";
