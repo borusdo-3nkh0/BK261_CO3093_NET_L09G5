@@ -16,6 +16,7 @@ MAX_FILE = 256 * 1024 * 1024
 MAX_ACTIVE = 8
 MAX_RECORDS = 128
 LIVE = {"queued", "awaiting_acceptance", "transferring"}
+ACCEPT_TIMEOUT = "Thất bại — hết thời gian chờ người nhận chấp nhận."
 
 
 def uncertain(error):
@@ -132,6 +133,7 @@ class FileService:
                 progressSource="live",
                 status="queued",
                 error=None,
+                sendPending=sender == self.username,
             ),
             "reserved": 0,
             "wire_id": None,
@@ -347,23 +349,43 @@ class FileService:
                 raise ValueError("Invalid P1 progress")
             self._emit(record, "transferring", count=event["bytes"])
         elif record and kind == "file_failed":
-            rejected = event.get("reason") == "REJECTED"
-            unknown = uncertain(event.get("reason", ""))
-            self._emit(
-                record,
-                "rejected" if rejected else "unknown" if unknown else "failed",
-                error={
-                    "code": "REJECTED" if rejected else "FILE_FAILED",
-                    "userMessage": "Chưa xác định kết quả truyền file."
-                    if unknown
-                    else "Người nhận đã từ chối file."
-                    if rejected
-                    else "Truyền file thất bại.",
-                },
-            )
+            if self.active and self.active["record"] is record:
+                # P1 emits before send_file exits; do not release UI/worker ownership yet.
+                self.active["failure_reason"] = event.get("reason", "")
+                return
+            status, error = self._failure(record, event.get("reason", ""))
+            self._emit(record, status, error=error)
             if record["data"]["recipientId"] == self.username:
                 self._release(record)
         # Sender completion uses the worker result; receiver uses received_files.
+
+    def _failure(self, record, reason, worker_uncertain=False):
+        data = record["data"]
+        waiting = (
+            data["status"] in {"queued", "awaiting_acceptance"}
+            and data["transferredBytes"] == 0
+        )
+        expired_offer = waiting and (
+            reason == "OFFER retry limit exceeded"
+            and data["senderId"] == self.username
+            or reason == "TRANSFER_EXPIRED"
+            and data["recipientId"] == self.username
+        )
+        if expired_offer:
+            return "failed", {"code": "ACCEPT_TIMEOUT", "userMessage": ACCEPT_TIMEOUT}
+        rejected = reason == "REJECTED"
+        unknown = not rejected and (uncertain(reason) or worker_uncertain)
+        return (
+            "rejected" if rejected else "unknown" if unknown else "failed",
+            {
+                "code": "REJECTED" if rejected else "FILE_FAILED",
+                "userMessage": "Người nhận đã từ chối file."
+                if rejected
+                else "Chưa xác định kết quả truyền file."
+                if unknown
+                else "Truyền file thất bại.",
+            },
+        )
 
     def _received(self, result):
         record = self.wire_ids.get(str(result.transfer_id))
@@ -403,6 +425,7 @@ class FileService:
             )
         except Exception as error:
             task["uncertain"] = uncertain(error)
+            task["worker_error"] = str(error)
         finally:
             task["done"].set()
 
@@ -411,7 +434,11 @@ class FileService:
             while not self.stopped.is_set():
                 with self.lock:
                     self._drain()
-                    if self.active and self.active["done"].is_set():
+                    if (
+                        self.active
+                        and self.active["done"].is_set()
+                        and not self.worker.is_alive()
+                    ):
                         # All emits precede worker return. Drain the bounded FIFO before
                         # replacing its exclusive context, even on failure/evicted events.
                         self._drain()
@@ -425,19 +452,21 @@ class FileService:
                                 record["data"]["recipientId"],
                             ):
                                 raise ValueError("P1 result mismatch")
-                            self._emit(record, "completed", count=result.size)
+                            status, error, count = "completed", None, result.size
                         else:
-                            self._emit(
+                            status, error = self._failure(
                                 record,
-                                "unknown" if task.get("uncertain") else "failed",
-                                error={
-                                    "code": "FILE_FAILED",
-                                    "userMessage": "Truyền file thất bại; chưa có xác nhận hoàn tất.",
-                                },
+                                task.get(
+                                    "failure_reason", task.get("worker_error", "")
+                                ),
+                                task.get("uncertain", False),
                             )
+                            count = None
                         shutil.rmtree(record["path"].parent)
                         self._release(record)
                         self.active = None
+                        record["data"]["sendPending"] = False
+                        self._emit(record, status, error=error, count=count)
                     if not self.active:
                         try:
                             record = self.tasks.get_nowait()

@@ -83,7 +83,7 @@ class TestReceiveLineTimeout(unittest.TestCase):
 
 class TestSocketServerTimeoutConfiguration(unittest.TestCase):
     def test_default_configuration(self):
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertEqual(server.handshake_timeout, 5.0)
         self.assertEqual(server.idle_timeout, 60.0)

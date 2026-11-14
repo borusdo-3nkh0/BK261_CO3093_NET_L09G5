@@ -13,9 +13,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from security.udp import PacketCodec
 from shared.protocol import (
     CHUNK_SIZE,
     MAX_DATAGRAM,
+    SECURE_CHUNK_SIZE,
     ZERO_ID,
     FileOffer,
     Packet,
@@ -101,7 +103,7 @@ class _ReceiveState:
             if not self.bitmap[sequence]:
                 if self.phase != "RECEIVING":
                     return False
-                self.stream.seek(sequence * CHUNK_SIZE)
+                self.stream.seek(sequence * self.offer.chunk_size)
                 if self.stream.write(payload) != len(payload):
                     raise OSError("Short file write")
                 self.bitmap[sequence] = 1
@@ -110,10 +112,15 @@ class _ReceiveState:
             return True
 
     def begin_verification(self):
-        with self.lock:
+        # A repeated FIN must not stall UDP receipt while verify/fsync holds the lock.
+        if not self.lock.acquire(blocking=False):
+            return False
+        try:
             if self.phase == "RECEIVING" and self.count == self.offer.total_chunks:
                 self.phase = "VERIFYING"
                 return True
+        finally:
+            self.lock.release()
         return False
 
     def verify(self, stopped):
@@ -172,6 +179,8 @@ class FileClient:
             or not 0 <= pacing <= 1
         ):
             raise ValueError("Invalid transfer limits")
+        self.codec = PacketCodec(ticket) if ticket.version == 2 else None
+        self.chunk_size = SECURE_CHUNK_SIZE if self.codec else CHUNK_SIZE
         self.ticket = ticket
         self.relay_address = (socket.gethostbyname(relay_address[0]), relay_address[1])
         self.download_dir = Path(download_dir)
@@ -238,7 +247,11 @@ class FileClient:
 
     def _send(self, kind, transfer_id=ZERO_ID, sequence=0, payload=b""):
         packet = Packet(kind, self.ticket.session_id, transfer_id, sequence, payload)
-        data = encode_packet(packet, self.ticket.key)
+        data = (
+            self.codec.encode(packet)
+            if self.codec
+            else encode_packet(packet, self.ticket.key)
+        )
         with self._send_lock:
             if self._stop.is_set() or self._socket is None:
                 raise TransferError("Client closed")
@@ -267,7 +280,11 @@ class FileClient:
                 data, endpoint = self._socket.recvfrom(MAX_DATAGRAM + 1)
                 if endpoint != self.relay_address:
                     continue
-                packet = decode_packet(data, self.ticket.key)
+                packet = (
+                    self.codec.decode(data)
+                    if self.codec
+                    else decode_packet(data, self.ticket.key)
+                )
                 if packet.session_id != self.ticket.session_id:
                     continue
                 self._handle(packet)
@@ -337,6 +354,8 @@ class FileClient:
             self._discard_incoming(transfer_id, packet.payload, notify=False)
 
     def _handle_offer(self, transfer_id, offer):
+        if offer.chunk_size != self.chunk_size:
+            raise ProtocolError("Incompatible file chunk version")
         if offer.recipient != self.ticket.username or not offer.sender:
             raise ProtocolError("Offer has no authenticated sender or wrong recipient")
         with self._lock:
@@ -516,7 +535,9 @@ class FileClient:
         path = Path(path)
         with path.open("rb") as stream:
             size, digest = file_digest(stream)
-            offer = FileOffer(recipient, path.name, size, digest)
+            offer = FileOffer(
+                recipient, path.name, size, digest, chunk_size=self.chunk_size
+            )
             with self._lock:
                 if (
                     len(self._outgoing) + len(self._incoming) + len(self._offers)
@@ -606,7 +627,7 @@ class FileClient:
                     state.retransmissions += 1
             while next_sequence < offer.total_chunks and len(pending) < int(cwnd):
                 self._check_sender(state, deadline)
-                stream.seek(next_sequence * CHUNK_SIZE)
+                stream.seek(next_sequence * offer.chunk_size)
                 payload = stream.read(offer.chunk_length(next_sequence))
                 if len(payload) != offer.chunk_length(next_sequence):
                     raise TransferError("Source file changed during transfer")
@@ -662,3 +683,5 @@ class FileClient:
             self._offers.clear()
         for state in incoming:
             state.abort()
+        if self.codec:
+            self.codec.context.close()

@@ -6,7 +6,8 @@ export function mountFileAttachments({ state, adapter, getConversation, showErro
   const summary = document.getElementById("file-selection");
   const records = new Map();
   let pickerContext = null;
-  const busy = record => ["submitting", "waiting", "unknown"].includes(record?.phase);
+  const busy = record => ["submitting", "waiting"].includes(record?.phase) || record?.sendPending === true ||
+    (record?.phase === "unknown" && record.sendPending !== false);
   const validFile = file => file instanceof File && file.name.trim().length > 0 &&
     !/[\x00-\x1f]/.test(file.name) && Number.isSafeInteger(file.size) && file.size >= 0;
   function unavailable(conversation) {
@@ -23,11 +24,11 @@ export function mountFileAttachments({ state, adapter, getConversation, showErro
     const record = records.get(conversation.conversationId);
     attach.disabled = busy(record);
     input.disabled = busy(record);
-    send.disabled = Boolean(unavailable(conversation)) || !record || busy(record) || record.phase === "completed";
+    send.disabled = Boolean(unavailable(conversation)) || !record || busy(record) || ["completed", "unknown"].includes(record.phase);
     const labels = { selected: "Đã chọn, chưa gửi", submitting: "Đang gửi yêu cầu",
       waiting: "Đã tiếp nhận yêu cầu; chờ xác nhận", unknown: "Chưa xác định kết quả",
       failed: "Yêu cầu gửi thất bại; chưa có xác nhận hoàn tất", completed: "Hoàn tất — đã xác nhận" };
-    summary.textContent = record ? `${record.file.name} · ${record.file.size.toLocaleString("vi-VN")} byte — ${labels[record.phase]}` : "Chưa chọn file.";
+    summary.textContent = record ? `${record.file.name} · ${record.file.size.toLocaleString("vi-VN")} byte — ${record.phase === "failed" && record.errorMessage ? record.errorMessage : labels[record.phase]}` : "Chưa chọn file.";
     if (state.fileService && state.fileService.state !== "ready") summary.textContent += ` ${state.fileService.userMessage || "Dịch vụ file chưa sẵn sàng."}`;
   }
   function cancelSelection() {
@@ -69,9 +70,9 @@ export function mountFileAttachments({ state, adapter, getConversation, showErro
     const reason = unavailable(conversation);
     if (reason) { showError(reason); render(); return; }
     if (!record || !validFile(record.file)) { showError("Hãy chọn file hợp lệ trước khi gửi."); return; }
-    if (busy(record) || record.phase === "completed") return;
+    if (busy(record) || ["completed", "unknown"].includes(record.phase)) return;
     showError();
-    Object.assign(record, { requestId: crypto.randomUUID(), transferId: crypto.randomUUID(), sessionId: state.sessionId, phase: "submitting" });
+    Object.assign(record, { requestId: crypto.randomUUID(), transferId: crypto.randomUUID(), sessionId: state.sessionId, phase: "submitting", sendPending: undefined, errorMessage: undefined });
     render();
     try {
       // true only means accepted locally; completion must arrive as an event.
@@ -94,6 +95,8 @@ export function mountFileAttachments({ state, adapter, getConversation, showErro
       if (event.type === "transfer.upsert" && event.data.transferId === record.transferId &&
         event.data.conversationId === conversationId && event.data.senderId === state.connection.selfUserId) {
         record.phase = { queued: "waiting", awaiting_acceptance: "waiting", transferring: "waiting", completed: "completed", failed: "failed", rejected: "failed", unknown: "unknown" }[event.data.status];
+        if (typeof event.data.sendPending === "boolean") record.sendPending = event.data.sendPending;
+        record.errorMessage = event.data.error?.code === "ACCEPT_TIMEOUT" ? event.data.error.userMessage : undefined;
       }
       if (event.type === "operation.failed" && event.data.requestId === record.requestId && busy(record)) record.phase = "failed";
     }

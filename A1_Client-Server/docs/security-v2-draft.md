@@ -1,5 +1,7 @@
 # Connect Security v2 — draft, chưa triển khai
 
+> Lịch sử đề xuất trước triển khai. Nhánh feature/p3-security đã làm phần tối thiểu được giao; xem [protocol hiện hành](protocol.md) và [README](../README.md). Các trạng thái dưới đây thuộc mốc draft, không phải trạng thái code mới. Không coi mọi đề xuất draft là yêu cầu đã làm.
+
 Ngày 2026-11-12. Đây là phương án chờ P1/P2/P3 thống nhất, không phải khả năng của bản bàn giao hiện tại. `security/payload.py` chỉ là module AES-GCM độc lập; bridge/P2/UDP chưa gọi mã hóa payload.
 
 ## Phương án khuyến nghị

@@ -1,10 +1,14 @@
+import errno
 import json
 import logging
+import select
 import socket
+import ssl
 import threading
 import time
 
 from p1.relay import FileRelay
+from security.context import Context, SecurityError, chat_aad, new_material
 from server.auth_manager import AuthManager
 from server.auth_protocol_adapter import AuthProtocolAdapter
 from server.client_handler import ClientHandler
@@ -15,7 +19,7 @@ from server.session_manager import SessionManager
 logger = logging.getLogger(__name__)
 
 
-def receive_line(client_socket, max_length=1024, timeout=None):
+def receive_line(client_socket, max_length=1024, timeout=None, *, io_lock=None):
     """Receive one newline-terminated TCP message within a deadline."""
 
     if timeout is not None:
@@ -29,6 +33,8 @@ def receive_line(client_socket, max_length=1024, timeout=None):
         deadline = time.monotonic() + timeout
     else:
         deadline = None
+    if io_lock is not None and deadline is None:
+        raise ValueError("Shared TLS reads require a finite timeout")
 
     data = bytearray()
 
@@ -39,9 +45,48 @@ def receive_line(client_socket, max_length=1024, timeout=None):
             if remaining <= 0:
                 raise socket.timeout("Receive deadline exceeded")
 
-            client_socket.settimeout(remaining)
-
-        chunk = client_socket.recv(1)
+        if io_lock is None:
+            if deadline is not None:
+                client_socket.settimeout(remaining)
+            chunk = client_socket.recv(1)
+        else:
+            try:
+                if not io_lock.acquire(timeout=remaining):
+                    raise socket.timeout("Receive deadline exceeded")
+                try:
+                    previous_timeout = client_socket.gettimeout()
+                    try:
+                        # Never hold the shared SSL lock while waiting for input.
+                        client_socket.setblocking(False)
+                        chunk = client_socket.recv(1)
+                    finally:
+                        client_socket.settimeout(previous_timeout)
+                finally:
+                    io_lock.release()
+            except (
+                BlockingIOError,
+                ssl.SSLWantReadError,
+                ssl.SSLWantWriteError,
+            ) as exc:
+                if (
+                    isinstance(exc, BlockingIOError)
+                    and exc.errno not in {errno.EAGAIN, errno.EWOULDBLOCK, 10035}
+                    and getattr(exc, "winerror", None) != 10035
+                ):
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise socket.timeout("Receive deadline exceeded") from exc
+                writing = isinstance(exc, ssl.SSLWantWriteError)
+                ready = select.select(
+                    [] if writing else [client_socket],
+                    [client_socket] if writing else [],
+                    [],
+                    remaining,
+                )
+                if not (ready[0] or ready[1]):
+                    raise socket.timeout("Receive deadline exceeded") from exc
+                continue
 
         if not chunk:
             return None
@@ -67,7 +112,9 @@ class SocketServer:
         idle_timeout=60.0,
         udp_host="127.0.0.1",
         udp_port=5001,
+        tls_context=None,
     ):
+        self.tls_context = tls_context
         self.host = host
         self.port = port
         for name, value in (
@@ -106,6 +153,7 @@ class SocketServer:
             host=udp_host,
             port=udp_port,
             max_sessions=max_clients,
+            secure=tls_context is not None,
         )
 
         # Multi-client components
@@ -152,8 +200,20 @@ class SocketServer:
 
         active_username = None
         file_ticket = None
+        crypto = None
+        io_lock = threading.Lock() if self.tls_context else None
 
         try:
+            if self.tls_context:
+                original = client_socket
+                client_socket = self.tls_context.wrap_socket(
+                    original, server_side=True, do_handshake_on_connect=False
+                )
+                with self.clients_lock:
+                    self.client_sockets.discard(original)
+                    self.client_sockets.add(client_socket)
+                client_socket.settimeout(self.handshake_timeout)
+                client_socket.do_handshake()
             with client_socket:
                 logger.info("Client connected: %s", client_address)
 
@@ -161,7 +221,9 @@ class SocketServer:
 
                 # STEP 1: HANDSHAKE
                 try:
-                    data = receive_line(client_socket, timeout=self.handshake_timeout)
+                    data = receive_line(
+                        client_socket, timeout=self.handshake_timeout, io_lock=io_lock
+                    )
 
                 except ValueError:
                     logger.warning("Handshake message too large")
@@ -176,13 +238,15 @@ class SocketServer:
                     logger.warning("Client disconnected during handshake")
                     return
 
-                if data != b"HELLO\n":
+                if data != (b"HELLO2\n" if self.tls_context else b"HELLO\n"):
                     logger.warning("Invalid handshake request")
                     client_socket.sendall(b"ERROR\n")
                     return
 
                 logger.info("Handshake request received")
-                client_socket.sendall(b"WELCOME\n")
+                client_socket.sendall(
+                    b"WELCOME2\n" if self.tls_context else b"WELCOME\n"
+                )
                 logger.info("Handshake completed successfully")
                 # Switch from handshake timeout to idle timeout.
                 client_socket.settimeout(self.idle_timeout)
@@ -195,7 +259,10 @@ class SocketServer:
                 while not self.stop_event.is_set():
                     try:
                         request_data = receive_line(
-                            client_socket, timeout=self.idle_timeout
+                            client_socket,
+                            max_length=32768 if self.tls_context else 1024,
+                            timeout=self.idle_timeout,
+                            io_lock=io_lock,
                         )
 
                     except ValueError:
@@ -320,6 +387,36 @@ class SocketServer:
                             continue
 
                         action = request["action"]
+                        if self.tls_context:
+                            try:
+                                request["message"] = crypto.decrypt_text(
+                                    request.get("message"),
+                                    chat_aad(
+                                        action,
+                                        active_username,
+                                        request.get("recipient")
+                                        if action == "UNICAST"
+                                        else None,
+                                    ),
+                                )
+                            except SecurityError:
+                                self.send_response(
+                                    client_socket,
+                                    active_username,
+                                    AuthProtocolAdapter.encode_response(
+                                        "SECURITY_FAILED"
+                                    ),
+                                )
+                                break
+                            if not request["message"] or len(request["message"]) > 4000:
+                                self.send_response(
+                                    client_socket,
+                                    active_username,
+                                    AuthProtocolAdapter.encode_response(
+                                        "INVALID_REQUEST"
+                                    ),
+                                )
+                                continue
 
                         if action == "UNICAST":
                             recipient = request.get("recipient")
@@ -413,9 +510,27 @@ class SocketServer:
                                     # Another thread may have logged in concurrently.
                                     status = "ALREADY_LOGGED_IN"
                                 else:
+                                    options = {}
+                                    if self.tls_context:
+                                        material = new_material()
+                                        crypto = Context(material, server=True)
+                                        welcome = (
+                                            json.dumps(
+                                                dict(
+                                                    status="LOGIN_SUCCESS",
+                                                    security=material,
+                                                )
+                                            )
+                                            + "\n"
+                                        ).encode()
+                                        options = dict(
+                                            crypto=crypto,
+                                            welcome=welcome,
+                                            io_lock=io_lock,
+                                        )
                                     router_registered = (
                                         self.message_router.register_client(
-                                            username, client_socket
+                                            username, client_socket, **options
                                         )
                                     )
                                     if not router_registered:
@@ -432,6 +547,9 @@ class SocketServer:
                             action, username, password
                         )
 
+                    # Secure LOGIN response/keys were sent before making the route visible.
+                    if self.tls_context and status == "LOGIN_SUCCESS":
+                        continue
                     # STEP 4: SEND RESPONSE
                     self.send_response(
                         client_socket,
@@ -477,7 +595,10 @@ class SocketServer:
                         "User disconnected and session removed: %s", active_username
                     )
 
+            if crypto:
+                crypto.close()
             # Remove socket from active connections.
+            client_socket.close()
             with self.clients_lock:
                 self.client_sockets.discard(client_socket)
 

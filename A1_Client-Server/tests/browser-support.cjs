@@ -27,13 +27,13 @@ async function stopProcess(child) {
 }
 
 class LinePeer {
-  constructor(port, timeout = 5000) {
+  constructor(port, timeout = 5000, secure = false) {
     this.buffer = ""; this.lines = []; this.waiters = []; this.failure = null;
-    this.socket = net.createConnection({ host: "127.0.0.1", port });
+    this.socket = secure ? require("node:tls").connect({ host: "127.0.0.1", port }) : net.createConnection({ host: "127.0.0.1", port });
     this.timeout = timeout;
     this.ready = new Promise((resolve, reject) => {
       const timer = setTimeout(() => { reject(new Error("TCP connect timeout")); this.socket.destroy(); }, timeout);
-      this.socket.once("connect", () => { clearTimeout(timer); resolve(); });
+      this.socket.once(secure ? "secureConnect" : "connect", () => { clearTimeout(timer); resolve(); });
       this.socket.once("error", error => { clearTimeout(timer); reject(error); });
     });
     this.socket.setEncoding("utf8");

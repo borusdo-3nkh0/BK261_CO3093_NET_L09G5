@@ -1,0 +1,75 @@
+name: P3 FIN diagnostic only
+
+on:
+  push:
+    branches: [handoff/p3-integrated-security-20261114]
+    paths: ['.github/p3_fin_probe.py', '.github/workflows/p3-fin-diagnostic.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  fin:
+    if: github.repository == 'ducbui2007-ops/BK261_CO3093_NET_L09G5'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: A1_Client-Server
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.10'
+      - run: python -m pip install --group dev
+      - name: Same test, unchanged retry and assertions, stop at first failure
+        run: |
+          @'
+          import json, re, subprocess, sys
+          from argparse import Namespace
+          from pathlib import Path
+          from p3 import Check, write_report
+          # Supervisor bound only; never change the test's 10s/12s or retry values.
+          c = Check(Namespace(timeout=180, output=Path('runtime/p3/fin-diagnostic')))
+          results = []
+          source = dict(c.report['sources']['p3'],
+              a1Tree=subprocess.check_output(['git','rev-parse','HEAD:A1_Client-Server'],text=True).strip())
+          for attempt in range(1, 21):
+              name = f'attempt-{attempt:02d}'
+              try:
+                  step = c.step(name, [sys.executable,'-X','utf8','-u','-B',
+                      '../.github/p3_fin_probe.py','--output',str(c.output/name)])
+                  status = 'PASS'
+              except Exception as error:
+                  step, status = dict(error=str(error)), 'FAIL'
+              path = c.output/name/'summary.json'
+              summary = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+              results.append(dict(attempt=attempt,status=status,step=step,summary=summary))
+              # Preserve failure information without publishing byte literals from assertions.
+              for artifact in c.output.rglob('*'):
+                  if artifact.suffix in {'.log','.xml'}:
+                      text = artifact.read_text(encoding='utf-8')
+                      text = re.sub(r"\bb(['\"])(?:\\.|(?!\1)[^\\\r\n])*\1", "[BYTES OMITTED]", text)
+                      artifact.write_text(text,encoding='utf-8')
+              write_report(c.output/'report.json',dict(source=source,python=sys.version,
+                  maximumAttempts=20,stopAtFirstFailure=True,parametersChanged=False,
+                  failureReproduced=status=='FAIL' and summary.get('exit_code')==1,
+                  results=results))
+              print(json.dumps(dict(attempt=attempt,status=status,summary=summary)),flush=True)
+              if status == 'FAIL':
+                  break
+          print('Evidence:',c.output)
+          sys.exit(1 if any(r['status']=='FAIL' for r in results) else 0)
+          '@ | python -X utf8 -
+      - name: Keep diagnostics even on FAIL
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fin-only-windows-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            A1_Client-Server/runtime/p3/fin-diagnostic/**/*.json
+            A1_Client-Server/runtime/p3/fin-diagnostic/**/*.log
+            A1_Client-Server/runtime/p3/fin-diagnostic/**/*.xml

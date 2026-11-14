@@ -9,8 +9,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
-from p1.client import FileClient, TransferError
+from p1.client import FileClient, TransferError, _ReceiveState
 from p1.relay import FileRelay
 from shared.protocol import (
     HEADER,
@@ -256,6 +257,97 @@ class TransferTests(unittest.TestCase):
             {item.path.read_bytes() for item in received}, {item[2] for item in jobs}
         )
         self.assertEqual(len({item.path for item in received}), 4)
+
+    def test_duplicate_fin_does_not_block_other_transfer_complete(self):
+        relay, alice, bob = self.pair()
+        busy, release, duplicate_seen, duplicate_handled, other_complete = (
+            threading.Event() for _ in range(5)
+        )
+        held = {}
+        complete_ready, forward_complete = threading.Event(), threading.Event()
+        saved_complete = []
+        verify = _ReceiveState.verify
+        handle = bob._handle
+        relay_send = relay._send_datagram
+
+        def hold_complete(data, endpoint):
+            header = HEADER.unpack_from(data)
+            if (
+                header[2] == Kind.COMPLETE
+                and header[3] == bob.ticket.session_id.bytes
+                and not forward_complete.is_set()
+            ):
+                if not saved_complete:
+                    saved_complete.append((data, endpoint))
+                complete_ready.set()
+                return
+            relay_send(data, endpoint)
+
+        def busy_verify(incoming, stopped):
+            if incoming.offer.filename == "held.bin":
+                with incoming.lock:
+                    held["id"] = incoming.transfer_id
+                    busy.set()
+                    if not release.wait(3):
+                        raise TransferError("Test verification barrier expired")
+            return verify(incoming, stopped)
+
+        def observe(packet):
+            duplicate = (
+                packet.kind == Kind.FIN
+                and packet.transfer_id == held.get("id")
+                and busy.is_set()
+            )
+            if duplicate:
+                duplicate_seen.set()
+            handle(packet)
+            if duplicate:
+                duplicate_handled.set()
+            if packet.kind == Kind.COMPLETE and packet.transfer_id != held.get("id"):
+                other_complete.set()
+
+        held_data, reverse_data = b"held verification", b"reverse complete"
+        first = self.source(held_data, name="held.bin")
+        second = self.source(reverse_data, name="reverse.bin")
+        with (
+            patch.object(_ReceiveState, "verify", busy_verify),
+            patch.object(bob, "_handle", observe),
+            patch.object(relay, "_send_datagram", hold_complete),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            try:
+                reverse_result = pool.submit(bob.send_file, second, "alice", timeout=10)
+                self.assertTrue(complete_ready.wait(2), "Reverse file was not verified")
+                held_result = pool.submit(alice.send_file, first, "bob", timeout=10)
+                self.assertTrue(
+                    busy.wait(2), "Verification worker did not reach barrier"
+                )
+                alice._send(Kind.FIN, held["id"])
+                self.assertTrue(duplicate_seen.wait(1), "Duplicate FIN did not arrive")
+                # Deliver an actual verified COMPLETE after the repeated FIN arrived.
+                forward_complete.set()
+                relay_send(*saved_complete[0])
+                self.assertTrue(
+                    other_complete.wait(1),
+                    "UDP loop blocked COMPLETE while verify held its lock",
+                )
+                result = reverse_result.result(timeout=1)
+                self.assertFalse(release.is_set())
+                self.assertTrue(duplicate_handled.is_set())
+                self.assertTrue(other_complete.is_set())
+                self.assertFalse(
+                    held_result.done(), "Held verification must not report success"
+                )
+                self.assertTrue(bob.received_files.empty())
+                self.assertEqual(result.size, len(reverse_data))
+            finally:
+                forward_complete.set()
+                release.set()
+            held_result.result(timeout=2)
+        self.assertEqual(
+            alice.received_files.get(timeout=2).path.read_bytes(), reverse_data
+        )
+        self.assertEqual(bob.received_files.get(timeout=2).path.read_bytes(), held_data)
 
     def test_manual_rejection_then_acceptance(self):
         _, alice, bob = self.pair(auto_accept=False)

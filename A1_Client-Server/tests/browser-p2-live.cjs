@@ -360,7 +360,9 @@ async function main() {
   await new Promise(resolve => relay.listen(0, "127.0.0.1", resolve));
   const spare = net.createServer(); await new Promise(resolve => spare.listen(0, "127.0.0.1", resolve));
   const relayHttpPort = spare.address().port; await new Promise(resolve => spare.close(resolve));
-  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "bridge.py", "--port", String(relayHttpPort), "--p2-port", String(relay.address().port)], { windowsHide: true, stdio: "ignore" });
+  // This ACK-control fixture is explicitly v1; production bridge CLI requires HTTPS/TLS.
+  const legacyBridge = "from bridge import BridgeServer; import sys; server=BridgeServer(('127.0.0.1',int(sys.argv[1])),('127.0.0.1',int(sys.argv[2]))); server.serve_forever()";
+  relayBridge = spawn(pythonExecutable(), ["-B", "-u", "-c", legacyBridge, String(relayHttpPort), String(relay.address().port)], { windowsHide: true, stdio: "ignore" });
   relayBridge.on("error", error => { bridgeError = error; });
   for (let n = 0; n < 100; n++) { if (bridgeError) throw bridgeError; try { if ((await fetch(`http://127.0.0.1:${relayHttpPort}/`, { signal: AbortSignal.timeout(1000) })).ok) break; } catch {} await sleep(100); }
   const relayB = new Peer(); await relayB.handshake();

@@ -1,5 +1,244 @@
 # Kế hoạch kiểm thử P3
 
+## Hết hạn chờ Accept — kiểm tra tập trung local, 2026-11-14
+
+Không chạy full suite/CI hoặc điều tra lỗi CI cũ. Không sửa protocol, retry, timeout hay dependency P1/P2. Giữ các thay đổi diagnostics local từ trước ngoài phạm vi lượt này.
+
+| Nhóm | Thao tác / tiêu chí | Kết quả thực chạy |
+| --- | --- | --- |
+| Bridge P3 | Test file bridge hiện có + lỗi OFFER/FIN/DATA/deadline, incoming expiry/SENDER_FAILED, early done khi worker còn sống, cleanup rồi gửi file mới | 33 PASS trong lượt chạy `tests/test_file_bridge.py`; cùng lượt có 1 test P1 mới lỗi fixture truyền trùng tham số name, không phải lỗi sản phẩm |
+| P1 UDP v2 thật + FileService P3 | Giữ nguyên retry loop, điều khiển Condition.wait_for chỉ ở bước OFFER để không chờ dài; B nhận offer thật nhưng không Accept. Xác nhận lỗi sender đúng OFFER retry limit exceeded, không có DATA; recipient nhận SENDER_FAILED. Sau đó file mới trong cùng hai phiên được Accept, COMPLETE và download/hash đúng | Sửa fixture name, chạy lại riêng `tests/test_accept_timeout.py`: 1 PASS, 0,58s. Staging/quota gửi cũ được dọn, thẻ/record failed cũ giữ nguyên |
+| Browser UI chính thức | Chạy nguyên `runFileUIChecks` và `runFileServiceChecks` bằng test adapter, tại 1440×900 và 1100×750; không chạy demo/các suite UI khác. Kiểm thông báo, nút khi worker pending/đã thoát, file mới, thẻ cũ, reject/completed/unknown và thiếu metadata | PASS: 38 + 20 assertion mỗi viewport, tách khỏi số pytest test. Node report 1,325s, process 1,451s; `runtime/accept-ui/check-a91066ca3cec46edabe35e7ed3059910/browser/browser-50c200ec-df4e-496e-90e2-fa713a0bbe96/report.json` |
+
+Ca P1 thật ở đây dùng relay/ticket v2 do fixture P1 trong cùng checkout cấp, không phải FILE_SESSION/P2/TLS/browser tích hợp thật. Browser dùng event giả trong tests, không local-demo. Chưa nghiệm thu hết hạn Accept qua hai Web client/P2 thật; không gọi ca này là IT end-to-end. Phía nhận chỉ có SENDER_FAILED vẫn hiện lỗi chung; không giả rằng đã biết sender hết hạn Accept. Test incoming TRANSFER_EXPIRED trước/sau Accept phân biệt trường hợp đủ/thiếu căn cứ.
+
+Lệnh Python đã chạy: `.\.venv\Scripts\python.exe -B -m pytest -q tests/test_file_bridge.py tests/test_accept_timeout.py`, sau sửa fixture chỉ chạy lại `.\.venv\Scripts\python.exe -B -m pytest -q tests/test_accept_timeout.py`. Driver browser tập trung tái dùng `tests/browser-file-live.cjs` tại `runtime/accept-ui/.../focused.cjs`; assertion trong hai file test được giữ đầy đủ. Log/report/runtime không đưa vào Git. Các kết quả bên dưới là lịch sử riêng.
+
+## CI 212bfe1: notification close cũ xóa password mới — 2026-11-14
+
+Đã tải artifact `14106993859` của [run Windows 43578212977](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43578212977), đọc integrated-browser.log/report.json và xem failure-0.png/failure-1.png. Assertion FAIL là `assert.equal(await client.eval("document.getElementById('login-password').value"), password)` trong helper login (hai lần kiểm hiện/ẩn tại dòng 80/83 của 212bfe1): actual chuỗi rỗng, expected password fixture. Log gốc không lưu stack/nhãn riêng để phân biệt hai dòng; ảnh A đang mở LOGIN và mắt ở chế độ hiện phù hợp với assertion sau nút Hiện. B chưa LOGIN; chưa đến các ca chat/file của browser. Không có assertion nhãn Security trong runner integrated này. Independent 120 test, integrated Python 188 test và security 25 test + browser đều PASS; integrated-browser mới là bước FAIL. Không kết luận WinError 10053 trên idle HTTP là nguyên nhân xóa input.
+
+Vòng đời có lỗi: close notification được xếp hàng; handler close gọi clearPasswords vô điều kiện, kể cả sau khi đã mở lại hộp và nhập password mới. Regression giữ hai close notification thật từ Đóng/Escape, chờ chúng đến, rồi phát lại sau khi nhập password ở lần LOGIN kế. Bản cũ **FAIL có kiểm soát** tại `Delayed close must not clear a reopened login`, run `runtime/late-close-red/check-6c501ee624544f19878f9118822ad9c7/`. Không chạy lặp CI để lấy xanh hoặc nới timeout/assertion.
+
+Bản sửa một điều kiện ở `web/js/main.js`: handler close chỉ dọn nếu `!dialog.open`; thao tác Đóng/cancel/submit/đổi mode vẫn xóa ngay. Giữ toàn bộ kiểm tra nút mắt và thêm nhãn lỗi riêng; giữ kiểm tra không có nhãn kỹ thuật trong browser security. Không sửa TLS/AES-GCM, protocol, bridge, FIN hoặc F5. Sau sửa **browser tích hợp PASS 41,258s**, `runtime/late-close-fixed/check-7f2e1fed6ed344d396bad1c315d78dd4/`, với P2/relay/TLS thật, đăng ký/login/chat chung-riêng, file hai chiều/hash, online/offline/reconnect. Artifact/ảnh nằm dưới runtime, không commit dữ liệu tạm hoặc bí mật; CI bản sửa được đối chiếu theo SHA push tiếp theo.
+
+`python -B p3.py check --suite ui security --timeout 180` sau sửa: **PASS 73,396s**, run `check-e4cba360fa34406781b40210e33f0669`; UI/demo 6,471s, security 25 Python test không skip + HTTPS/browser 66,873s, audit 4 JSON PASS. JS syntax, diff và UTF-8 đạt. Không chạy lại CI cũ để lấy xanh; không chạy load/file lớn hoặc sửa thời hạn truyền. Các suite Python không đổi khác được CI mặc định của commit mới kiểm tra.
+
+## Đăng ký tài khoản từ Web — 2026-11-14
+
+Đối chiếu `server/auth_manager.py`, `client_handler.py` và `socket_server.py`: username là chuỗi có ký tự không phải khoảng trắng; password là chuỗi không rỗng. P2 trả REGISTER_SUCCESS hoặc REGISTER_FAILED; sau validation trên, REGISTER_FAILED nghĩa là username đã tồn tại. Không thêm chính sách password hay sửa protocol/P2. Account/hash vẫn chỉ trong RAM P2, mất khi restart.
+
+Hộp tài khoản dùng chung hai chế độ Đăng nhập/Đăng ký; đăng ký có xác nhận password và nút mắt điều khiển cả hai ô. UI gọi adapter.register → POST `/api/register` → bridge mở TLS xác minh chứng thư, HELLO2/WELCOME2 và REGISTER theo JSON newline hiện có. Kết nối đăng ký được đóng sau phản hồi, không tạo phiên LOGIN/context/ticket và không làm đổi phiên chat hiện tại. Thành công trở về Đăng nhập, điền username, xóa password, không tự đăng nhập. Bridge giữ giới hạn frame xác thực 1.024 byte hiện có.
+
+Form chặn submit lặp khi Promise đang chờ; khóa chuyển chế độ/input trong lúc chờ. Mật khẩu chỉ dùng tạm cho request, không ghi vào URL/storage/log; xóa cả hai ô và ẩn lại khi submit (kể cả validation lỗi), đổi chế độ hoặc đóng hộp. Thông báo UI cố định cho thành công, trùng tên, xác nhận lệch, dữ liệu không hợp lệ/quá dài và lỗi kết nối; không hiển thị exception thô. REGISTER từ chối plaintext và chứng thư sai. Test phát hiện SSLCertVerificationError cũng thuộc ValueError; đã bắt riêng trước validation để trả lỗi kết nối 503 thay vì hiểu nhầm là lỗi dữ liệu 400.
+
+| Ca mới / bổ sung | Thao tác và kỳ vọng |
+| --- | --- |
+| HTTPS → TLS P2 thật | Đăng ký username Unicode mới; thành công không tạo session/ticket, đăng ký lần hai trả REGISTER_FAILED; sau đó LOGIN và chat hai chiều với account tạo theo luồng cũ |
+| Biên HTTP / TLS | Origin sai bị 403; JSON/type/rỗng/whitespace và frame quá dài bị 400; không tạo account hoặc phiên. Thiếu TLS bị từ chối; CA sai bị 503, không fallback/plaintext hoặc lộ password |
+| Hai Chrome hiện có | A đăng ký từ Web, B dùng REGISTER TCP/TLS cũ. Xác nhận lệch và username whitespace không gọi API; frame quá dài hiện lỗi dễ hiểu. Giữ phản hồi REGISTER thật để kiểm submit lặp chỉ tạo một request; thành công quay về LOGIN, username có sẵn, password rỗng và chưa kết nối |
+| Cleanup form và hồi quy | Nút mắt giữ nội dung và đổi đúng nhãn, mode/close/submit xóa mật khẩu; duplicate hiện đúng lỗi; không URL/storage. Sau LOGIN tiếp tục giữ chat chung/riêng, online/offline, file hai chiều/accept/reject/hash, ACK và reconnect hiện có |
+
+Lượt targeted Python sau sửa mapping chứng thư: **15 passed**, 0 skip, 10,758s; `runtime/register-target/check-9e1097af1d6f489eb187b61ed9b659b0/`. Lượt đầu 14 passed/1 failed vì kỳ vọng HTTP 503 cho CA sai nhưng handler trả 400; không bỏ assertion.
+
+| Kiểm tra thực chạy Windows/Python 3.14.4 | Kết quả |
+| --- | --- |
+| `python -B p3.py check --timeout 600`, run `check-8a4953403f4c4916ac9f420f30bc183c` | **PASS 253,102s**, audit 6 JSON PASS; base `352c92e` + tracked changes lúc chạy |
+| Independent | **120 passed**, không skip; Ruff check/format, JS syntax và helper đạt; suite 21,959s |
+| UI/demo | **PASS 5,933s**, giữ 242 assertion chính thức ở mỗi desktop 1440×900/1366×768/1100×750 và 246 ở mobile 390×844; demo vẫn dùng adapter riêng |
+| Integrated Python + hai Chrome/P2/relay thật | **188 passed + 58 subtest**, không skip; 3 large/load deselected có chủ ý. Suite 171,157s, browser 44,595s. A đăng ký Web rồi LOGIN; B đăng ký TCP/TLS theo luồng cũ rồi LOGIN; chat/file hai chiều, size/hash/accept/reject/online và reconnect giữ nguyên |
+| Security | **25 passed**, không skip, suite 54,002s; thêm REGISTER HTTPS/TLS/Unicode và CA sai. HTTPS/browser và các ca key/tag/AAD/nonce/replay/retry hiện có đều đạt |
+
+Bằng chứng ở runtime cùng run ID; ảnh `integrated/browser/integrated-1ff4937b-d623-4256-bbcb-7833e3f562a5/registration-success.png` đã kiểm trực quan: thông báo thành công, username có sẵn, password trống và chưa kết nối. Không commit runtime, credential/key/ticket hoặc dữ liệu thử. P2/relay thật do fixture khởi tạo trong cùng checkout, không dùng stub/ticket mẫu và không dừng server người dùng đang chạy. Windows CI chạy lại khi push nhánh handoff; đối chiếu run theo SHA bàn giao. Không chọn legacy/large/load trong lượt local này; chưa sửa F5 hoặc lưu account lâu dài.
+
+CI đầu của `766cfc0`: fork `43575421514` và PR #3 `43575427165` **FAIL integrated-browser** tại assertion `Closing the dialog clears credentials`; independent/UI/security đều PASS, P1 workflow PASS. Artifact PR `14106117779` đã tải về `runtime/registration-ci-43575427165/artifact.zip`. Nguyên nhân trong luồng mới: xóa password chỉ ở notification close được xếp hàng, nên ngay sau thao tác đóng có thể còn giá trị trong form. Bản vá chỉ xóa đồng bộ trong nút Đóng và sự kiện cancel (Escape), giữ close làm dọn dự phòng. Không tăng timeout hoặc nới assertion.
+
+Regression chặn notification close để kiểm hành động đã xóa trước notification: bản cũ **FAIL có kiểm soát**, `runtime/register-close-red/check-b2519606a40f4a2a850f22aaf25616ba/`; bản sửa **PASS**, gồm Escape và toàn bộ browser chat/file hiện có, 40,962s, `runtime/register-close-fixed/check-13d522ab59754ba9b7a941f0d8c8988f/`. Không sửa Python/protocol sau lượt tổng hợp ở bảng trên. Windows CI của commit vá được đối chiếu riêng sau push, không lấy kết quả local thay CI.
+
+## FIN lặp không chặn vòng nhận UDP — 2026-11-14
+
+PR #3 từng FAIL tại `test_bidirectional_concurrent_files_and_same_names` với `FIN retry limit exceeded` trong run `43558838159`. Lượt chẩn đoán riêng Windows/Python 3.14.10, run [43562061593](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43562061593), giữ nguyên retry/timeout/assertion: **20/20 lượt đạt, 80 transfer**, chưa tái hiện FAIL cũ. Tuy nhiên timeline đo được FIN lặp gọi `begin_verification()` chờ lock của worker verify/fsync **260,230 ms**; COMPLETE thật của transfer ngược chiều đã qua relay nhưng client xử lý muộn **179,347 ms**. Relay vẫn ở trạng thái COMPLETED đúng. Đây là điểm chặn đã đo được, chưa phải bằng chứng xác định toàn bộ nguyên nhân FAIL cũ.
+
+Bản sửa chỉ đổi `p1/client.py:_ReceiveState.begin_verification()` sang lấy lock không chặn; lock bận thì bỏ qua FIN đó để vòng nhận tiếp tục. Kiểm tra phase/đủ chunk vẫn trong lock. Worker vẫn kiểm size/hash, fsync và lưu thành công trước khi công bố file/gửi COMPLETE. Không đổi retry, timeout, pacing hoặc thuật toán truyền.
+
+Test mới `test_duplicate_fin_does_not_block_other_transfer_complete` dùng hai transfer/UDP thật: relay giữ COMPLETE đã verify của transfer ngược chiều; worker verify của transfer còn lại giữ lock bằng barrier hữu hạn. Sau khi FIN lặp đến, thả COMPLETE và kiểm client xử lý nó **trước khi thả worker**. Transfer còn giữ worker chưa được báo thành công; sau thả, cả hai file đúng bytes. Barrier được nhả trong finally, không giữ thread vô hạn. Chạy lại logic khóa chặn cũ trong process test riêng cho **FAIL đúng assertion COMPLETE bị chặn**; logic mới PASS.
+
+| Kiểm tra Windows/Python 3.14.4 | Kết quả thực chạy |
+| --- | --- |
+| Regression có kiểm soát, `runtime/fin-fix-exact-regression/check-d25876ffe8914c9ab60d017102848273` | Logic cũ FAIL như dự kiến; logic mới **1 passed**, 0 skip, 0,860s |
+| P1 cùng checkout: protocol, CLI, UDP transfer | **36 passed**, 0 skip, 15,354s; `runtime/fin-fix-p1/check-5a713fb0eb2943028d26e129ab9567e5/` |
+| Integrated Python + hai Chrome/P2/relay thật | **188 passed, 58 subtest**, 0 skip; 3 large/load deselected có chủ ý. Suite 166,277s, browser 40,305s; chat/file hai chiều, hash, ACK, online/offline/reconnect và ngắt DATA/FIN/COMPLETE đạt |
+| Security Python + HTTPS/browser | **23 passed**, 0 skip, suite 51,551s; key/tag/AAD, nonce/replay/retry, chứng thư và thu hồi phiên đạt |
+| Run `check-4ead31cf49d045be85fddfe8de54d3c6` | **PASS 217,873s**, audit 4 JSON PASS; source `099b943` + tracked changes lúc chạy, P1/P2/P3 cùng checkout |
+| Ruff check/format, diff, encoding tài liệu | **PASS**; không thêm dependency, runtime hoặc bí mật vào diff |
+
+Chạy lại: `python -B -m pytest -q tests/test_udp_transfer.py::TransferTests::test_duplicate_fin_does_not_block_other_transfer_complete`; P1 hiện tại: `python -B -m pytest -q tests/test_protocol.py tests/test_cli.py tests/test_udp_transfer.py`; tích hợp: `python -B p3.py check --suite integrated security --timeout 360`. Report/JUnit/log ở runtime không commit; log chẩn đoán không chứa key, ticket hoặc nội dung file. CI cần đối chiếu SHA sau push lên nhánh handoff, không dùng run chẩn đoán thay cho nghiệm thu bản sửa. Không sửa F5 hoặc ca 256 MiB; FAIL 256 MiB do timeout 300 giây vẫn là đầu việc riêng.
+
+## Hai tiện ích UI, F5 tạm dừng — 2026-11-14
+
+Theo yêu cầu mới nhất, **chưa sửa F5** để người dùng nghiên cứu thêm. Không thay bridge, adapter, reducer, session/token hoặc cơ chế lưu phiên. Lượt này chỉ thêm nút mắt mật khẩu ở hộp LOGIN chính thức và phím Enter/Shift+Enter ở composer dùng chung chính thức/demo.
+
+Mật khẩu mặc định ẩn; nút type=button không submit, đổi nhãn truy cập Hiện/Ẩn mật khẩu và giữ giá trị. Mở lại hộp hoặc submit sẽ trở về trạng thái ẩn. Composer dùng requestSubmit để đi qua kiểm tra rỗng/Promise/chống gửi lặp và ACK hiện có; Shift+Enter giữ newline native, isComposing/keyCode 229 không gửi, held Enter không tự gửi lặp. Dòng hướng dẫn đã đổi. Demo không có ô mật khẩu, dùng lại composer mới; không thêm UI đăng nhập vào demo.
+
+| Kiểm tra thực chạy Windows/Python 3.14.4, Chrome | Kết quả |
+| --- | --- |
+| `p3.py check --suite independent ui --timeout 90`, `check-9c17f37939bd45a289a68eb8581b43d6` | **PASS** independent 18,776s, UI 6,639s; Python độc lập/Ruff/format/JS/helper đạt, audit 2 JSON đạt |
+| UI chính thức dùng test adapter | **242 assertion** mỗi 1440×900/1366×768/1100×750; **246** ở 390×844. Giữ mọi ca cũ, thêm 8 ca Enter/Shift/IME/repeat/retry/rỗng/hướng dẫn |
+| Demo qua cùng renderer | Giữ **33 smoke + 37 company** mỗi desktop/mobile; thêm thao tác phím native qua CDP: Shift+Enter xuống dòng, Enter gửi tiếng Việt và reset xác định đều đạt |
+| Hai Chrome với P2/relay/TLS thật | **PASS 45,421s**, `runtime/ui-utilities/check-6e6488d3725f41d49a4970f8f5ea6bca`. Nút mắt giữ đúng mật khẩu/nhãn, không submit; Enter gửi nội dung hai dòng có dấu đúng một lần; chat/file/online/offline/reconnect cũ vẫn đạt |
+
+IME được kiểm bằng KeyboardEvent.isComposing/keyCode 229 trong trình duyệt; không tuyên bố đã điều khiển bộ gõ Windows thực. Native Enter/Shift+Enter và nội dung Unicode được kiểm qua Chrome CDP. Bằng chứng runtime không commit. Không chạy lại load/file lớn trong lượt UI; các server localhost người dùng đang chạy được giữ nguyên. CI của bản sửa TLS ở mục dưới là lịch sử, không thay cho SHA tiện ích UI mới.
+
+## Sửa đọc TLS / WinError 10035 — 2026-11-14
+
+Nhánh `handoff/p3-integrated-security-20261114`, base `e9f7e7916a19cf70edd8cd5ee10d62c07cf39d1a`. Đã đọc lại log run `check-e0f9bd47650f47ddb80b1584c4c53b5c`: 01:42:04,133, C09 bị đóng từ `receive_line` → `SSLSocket.read` sau `BlockingIOError 10035`, trong lúc các survivor broadcast. Điểm sai trong code: receiver và router có thể dùng cùng SSL object đồng thời; `send_locks` trước đó chỉ tuần tự hóa các writer. Không có bằng chứng rằng cần tăng timeout hoặc thay thuật toán truyền file.
+
+[OpenSSL thread safety](https://docs.openssl.org/master/man7/openssl-threads/) yêu cầu không dùng cùng SSL object đồng thời. [CPython 3.14.4 `_ssl.c`](https://github.com/python/cpython/blob/v3.14.4/Modules/_ssl.c) có nhánh chuyển lỗi Winsock từ SSL_ERROR_SYSCALL thành OSError; [Python SSL readiness](https://docs.python.org/3.14/library/ssl.html#notes-on-non-blocking-sockets) mô tả WANT_READ/WANT_WRITE và chờ select. Không kết luận đây là lỗi certificate, AES hoặc định tuyến; lịch thread chính xác của lỗi cũ không được ghi lại.
+
+Bản sửa chỉ ở `server/socket_server.py` và `server/message_router.py`: TLS receiver và writer dùng chung lock hiện có của router. Trong lock, receiver chỉ gọi recv không chặn, phục hồi timeout socket rồi nhả lock; chờ read/write readiness ở ngoài lock. Lock acquisition và select đều dùng **deadline monotonic ban đầu của cả frame**, không khởi động lại timeout sau would-block. Chỉ nhận WSAEWOULDBLOCK/EAGAIN và SSLWantRead/Write như điều kiện chờ; EOF trả None, reset/lỗi TLS nghiêm trọng vẫn propagate để đóng phiên/thu hồi ticket. TCP legacy không đổi; handshake/idle timeout vẫn 5/60 giây, frame limit và thuật toán file không đổi.
+
+Thêm `tests/test_tls_receive.py`, được suite integrated thu tự động. Test lỗi 10035 chèn vào **SSLSocket thật** của P2: trước sửa **FAIL** vì phiên bị đóng (`runtime/receive-before.log`); sau sửa giữ phiên, tin tới đúng một lần. Test hai client thật còn giữ receiver ở giữa thao tác SSL bằng barrier hữu hạn, xác nhận router phải chờ cùng lock; sau nhả barrier, chat vẫn nhận. Các ca riêng kiểm deadline khi chờ lock/partial frame, EOF, reset, BlockingIOError khác và lỗi TLS fatal. Đây là tái hiện đường lỗi có kiểm soát, không tuyên bố đã ép lịch OS tái tạo tự nhiên đúng lần lỗi cũ.
+
+Lệnh nghiệm thu cùng P2/relay thật trong checkout: `python -B p3.py check --suite integrated security load --timeout 480`. Lượt này không chạy file lớn hoặc sửa lỗi 256 MiB. Các kết quả cũ bên dưới được giữ làm lịch sử; CI phải đối chiếu SHA bản sửa thực chạy.
+
+| Kiểm tra Windows/Python 3.14.4 sau sửa | Kết quả thực chạy |
+| --- | --- |
+| Targeted `pytest tests/test_tls_receive.py tests/test_timeout_resilience.py tests/test_message_router.py -q` | **38 passed**, 8 subtest, 4,72s; gồm 7 ca mới, không bỏ assertion cũ |
+| Run `check-63bccc9ad4e04ffaafa563d89818fd34` | **PASS**, tổng 272,093s; audit 6 JSON PASS; source e9f7e79 + tracked changes lúc chạy |
+| Integrated Python + hai Chrome/P2/relay thật | **187 test/58 subtest đạt**, không skip; 3 large/load deselected có chủ ý. Suite 165,681s; browser 40,323s. Chat/file/hash, online/offline/reconnect và ngắt DATA/FIN/COMPLETE giữ nguyên assertion |
+| Security Python + HTTPS/browser | **23 test đạt**, không skip; suite 50,192s. Sai CA/hostname, key/tag/AAD, replay/retry và thu hồi phiên vẫn được kiểm |
+| 10 client TLS/AES | **Đạt**, 22,123s: login 10/10; 50 tin gửi, kỳ vọng/thực nhận **450/450**, ACK 50; 0 thiếu/trùng/sai đích. Sau đóng một nửa: **20/20** lượt nhận; reconnect 5/5, registry/online đúng |
+| 20 client TLS/AES | **Đạt**, 22,859s: login 20/20; 100 tin gửi, kỳ vọng/thực nhận **1.900/1.900**, ACK 100; 0 thiếu/trùng/sai đích. Sau đóng một nửa: **90/90** lượt nhận; reconnect 10/10, registry/online đúng |
+| File/chat 4 client | **Đạt**, 1 test/8,221s; giữ kiểm tra chat đã nhận lúc file còn transferring, size/hash và cleanup |
+| Cleanup/load log | Tất cả 30 worker exit 0, reset socket về 0; server PID 36072 dừng bình thường, không terminate cưỡng bức; **0 WinError 10035, 0 unexpected client socket error** trong log lượt này |
+| Ruff, format, dependency, diff | Đạt; không thêm dependency, không tăng handshake/idle/file timeout |
+
+Bằng chứng local ở `runtime/p3/checks/check-63bccc9ad4e04ffaafa563d89818fd34/`: `integrated.xml`, `security.xml`, `load.xml`, các browser report và `load/load-<UUID>/results.json`/server.log. Dùng tài khoản/payload thử; không commit runtime, private key hoặc ticket. Một lượt load đầy đủ sau sửa đã đạt; không tuyên bố đo tần suất lỗi hoặc benchmark. Windows CI chưa chạy tại thời điểm ghi local, sẽ đối chiếu run gắn SHA bản sửa sau push; mặc định CI chạy integrated/security cùng các ca mới, load opt-in được nghiệm thu local riêng.
+
+## Gom nhánh bàn giao — 2026-11-14
+
+Nhánh `handoff/p3-integrated-security-20261114` ghép `review/main-integration-20261113` **9b46e9cda0bfc7800a06f2b9c9140e0baf03e979** với `feature/p3-security` **03783e3a4cde0a9c726af0544933194c7301e5a1**. Source production P1/P2/P3 giữ nguyên nhánh Security; chỉ giải quyết runner/workflow/tài liệu và điều chỉnh test cho protocol v2. Các mục ngày trước bên dưới giữ nguyên làm lịch sử, không thay nghiệm thu bản ghép.
+
+`p3.py check --timeout 600` mặc định chạy independent/UI/integrated/security. Integrated không thu lại các file Python independent/security; cả hai suite live dùng TLS/HTTPS, AES-GCM và FILE_SESSION P2 thật cùng checkout. Fixture tích hợp dùng lại fixture Security, CA tạm và SPKI đúng cert cho Chrome. Hook fault đọc header thay vì gọi decoder v1 hoặc tiêu thụ nonce replay của client thật. Runner load dùng TLS/AES cho checkout hiện tại; backend tham chiếu v1 vẫn tách process/suite riêng. Không thêm dependency hoặc tính năng production.
+
+CI Windows Python 3.14 kích hoạt khi push đúng nhánh bàn giao, chạy all trước rồi legacy p1/p2 riêng. Large/load tiếp tục opt-in; **không chạy hoặc xử lý ca 256 MiB** trong lượt ghép. Kết quả FAIL do timeout P1 300 giây ở nhánh review vẫn giữ nguyên, không suy ra được sửa nhờ Security. File 32 MiB cũng chưa chạy lại trong lượt ghép.
+
+| Kiểm tra thực chạy trên bản ghép (Windows/Python 3.14.4) | Kết quả |
+| --- | --- |
+| Targeted: integrated P3, DATA/FIN/COMPLETE và CLI | **28 passed**, 3 opt-in deselected, 45,82s |
+| `p3.py check --suite integrated security --timeout 300`, run `check-975c3b438ace4a0aaae98f0f41f274ab` | **PASS**, 214,143s, audit 4 JSON PASS; integrated 180 Python test/58 subtest, 0 skip + hai browser 40,209s; security 23 Python test, 0 skip + HTTPS/browser 8,706s |
+| Hai Chrome của integrated | Chat chung/riêng hai chiều, online/offline/reconnect, file 8 MiB A→B, tên Unicode/trùng tên, 262.147 byte B→A, file rỗng, reject, download/hash và quyền phiên **đạt**. Chat đến DOM khi file vẫn transferring, quan sát 148 cập nhật tiến trình; 1440×900/1100×750 không tràn/composer vẫn trong viewport |
+| `p3.py check --suite independent ui --timeout 90`, run `check-f5cb6f956a554a80821905ef1d96cd1a` | **PASS** independent 17,913s, UI/demo 5,366s; Ruff/format/JS/helper và các assertion hiện có được giữ |
+| Runner load trên TLS, run `check-e0f9bd47650f47ddb80b1584c4c53b5c` | **FAIL**, 87,796s: 10/10 login, stable 450/450 lượt nhận, 0 trùng; sau đó một survivor bị server ngắt, chờ registry reconnect timeout. Nhóm 20/20 **đạt**, stable 1.900/1.900 lượt nhận, 0 trùng; registry/online/reconnect đạt, server/worker dọn hết |
+| File/chat 4 client trên TLS chạy riêng sau load FAIL | **PASS**, 1 test/8,460s; `runtime/merge-load-target/check-2c4cbadca56d4171a1c75001bf4a4bc8`. Giữ assertion 5 tin đã đến cả 3 người nhận trong lúc file còn transferring, hash file khớp |
+| Dependency, encoding và diff | `pip check`, Ruff check/format đạt; tài liệu UTF-8, không marker xung đột; source production khớp hoàn toàn nhánh Security |
+
+Lỗi load có bằng chứng tại `load-clients.log` và `load/load-<UUID>/*server.log`: **BlockingIOError [WinError 10035]** ở `server/socket_server.py:receive_line` → `SSLSocket.read`, client n10-C09 bị ngắt khi các survivor broadcast; LOGIN reconnect của 5 client cũ vẫn thành công nhưng registry thiếu C09. Đây là code production nguyên trạng từ `03783e3`, không sửa trong lượt ghép. Không gọi toàn bộ load là PASS. Tái hiện bằng `python -B p3.py check --suite load --timeout 240`; lỗi phụ thuộc lịch chạy thread, chưa khẳng định nguyên nhân sâu hơn hoặc tần suất. Lượt đầu targeted còn lỗi export ROOT khi tái sử dụng helper; đã sửa export test và 28 test trên đạt, không sửa production.
+
+Kết quả CI nhánh bàn giao chưa có tại thời điểm ghi local: đối chiếu run của SHA merge sau push. CI mặc định không chọn load/large, vì vậy CI xanh không thay thế hoặc xóa lỗi load nói trên. Bằng chứng nằm local dưới runtime, không commit key/ticket/cert/profile/file thử; phần lịch sử hai nhánh dưới đây vẫn được giữ.
+
+Môi trường được hỗ trợ: **Windows/Python 3.14**. Hướng dẫn hiện hành: [testing.md](testing.md), [README](../README.md), [protocol](protocol.md). Kết quả security hiện hành ở mốc đầu dưới đây; các mục có ngày trước đó là lịch sử, không thay cho nghiệm thu nhánh mới.
+
+## Bước 8 — TLS và AES-GCM thật, 2026-11-13
+
+Source: worktree `MMT-P3-security`, nhánh `feature/p3-security`, baseline upstream/main **5249f106554a3300fae4798c39ada7bfdf70e0b3** cùng thay đổi chưa commit của lượt này. P1/P2/P3 đều nạp từ **cùng checkout**, có assertion module root; không lấy backend tham chiếu cũ để nghiệm thu mã hóa. Windows, Python 3.14.4, Node 24.21, Chrome 157; port TCP/UDP/HTTPS do OS cấp, chỉ dừng tài nguyên của lượt kiểm thử. Security tối thiểu đã triển khai; phần còn lại của draft cũ không tự trở thành yêu cầu.
+
+Lệnh chạy lại từ `A1_Client-Server`:
+
+```powershell
+.\.venv\Scripts\python.exe -B p3.py check --suite security --timeout 180
+.\.venv\Scripts\python.exe -B -m pytest tests -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+```
+
+| Ca / bằng chứng thực chạy | Kết quả |
+| --- | --- |
+| Suite security cuối, `check-a237e455f8854659833b2dc74a5e6338` | **PASS 23 test Python, 0 skip**, 41,273s; HTTPS/browser 9,696s; suite tổng 50,986s; audit 2 JSON PASS |
+| Chat riêng/chung hai chiều, online/offline, phiên và FILE_SESSION do P2 thật cấp | **Đạt**. Nội dung gửi là envelope AES-GCM; P2 giải mã/định tuyến/mã hóa theo context người nhận. Khóa/ticket không xuất hiện trong response browser |
+| File hai chiều, Chấp nhận/Từ chối, rỗng, tên Unicode/trùng tên, tải đúng phiên | **Đạt** với P1/relay thật, payload binary 65.792 byte trong Python và 65.539 byte trong browser. Download SHA-256 plaintext khớp; file chưa hoàn tất hoặc phiên khác bị chặn |
+| Sai khóa/tag/AAD chat | **Đạt**: SECURITY_FAILED, không định tuyến, đóng/thu hồi context và ticket; LOGIN lại dùng UUID/khóa mới, packet phiên cũ bị bỏ |
+| UDP trên đường truyền thật: làm sai tag/AAD dù HMAC hợp lệ, mất ACK/COMPLETE, trùng/đảo DATA và replay | **Đạt**: 305 frame đã mã hóa, 3 packet tamper/replay bị từ chối; nonce không trùng trong mỗi chiều/context; retry hoàn tất, chỉ một file được công bố và hash khớp; datagram không quá 1.084 byte, không chứa marker plaintext |
+| Certificate sai CA/sai hostname; HELLO v1 trong TLS; TCP plaintext | **Đạt**: từ chối, không fallback. Bridge báo TLS_VERIFY_FAILED khi CA sai. Python xác minh CA/hostname thật; browser headless ghim đúng SPKI cert thử trong profile tạm, không sửa trust store Windows |
+| Giới hạn chat sau mã hóa | **Đạt**: 4.000 ký tự qua frame lớn hơn v1; client tự tạo envelope hợp lệ 4.001 ký tự bị P2 từ chối, client nhận vẫn kết nối |
+| Browser UI/demo hồi quy trong suite security | **Đạt**: 234 assertion mỗi 1440×900/1366×768/1100×750, 238 ở 390×844; demo 33+37 ở desktop/mobile. Login/chat riêng/chung, file hai chiều/tiến trình/hash và nhãn TLS/AES được kiểm với backend thật; demo vẫn mô phỏng riêng |
+| pytest toàn bộ main, `runtime/security/regression/check-4e044a0da2b6438cabdbc521e4c19a55` | **304 passed**, 58 subtest, 6 legacy deselected, 136,516s. Chạy trước khi thêm ca giới hạn chat cuối; ca mới sau đó đạt riêng và nằm trong 23 test security ở trên. Không tuyên bố đã chạy lại toàn bộ thành 305 |
+| Backend tham chiếu v1, chạy process riêng | P1 và independent/UI đạt ở `check-d90472dc7a76426bb2565abbc4df0986`; P2 **PASS 77,640s** ở `check-a75032d410344aadbfa82a2ed2e39dae`. Đây là hồi quy v1, không phải chứng cứ TLS/AES |
+| Dependency, Ruff và format | `pip check`, `ruff check .`, `ruff format --check .` đạt. Không thêm dependency |
+| Windows CI nhánh security | Chưa chạy tại thời điểm ghi kết quả local; xem run gắn SHA commit thực tế trên fork sau push, không dùng CI nhánh review thay thế |
+
+Lượt tổng hợp đầu `check-d90472dc7a76426bb2565abbc4df0986` có hai lỗi: fixture ACK v1 còn gọi CLI bridge nay yêu cầu HTTPS; test plaintext bị timeout do socket TLS lỗi chưa được đóng trước khi vào request loop. Đã tách bootstrap HTTP v1 trong **test**, giữ CLI production bắt buộc bảo mật; đóng socket ở `finally` cho cả TLS handshake lỗi. Các ca bị ảnh hưởng đã đạt trong lượt P2/security tiếp theo. Không che các lượt lỗi trước.
+
+Bằng chứng local: `runtime/p3/checks/<runId>/report.json`, `security.xml`, log và `security/browser/browser-3582bde6-5e09-4670-ba8c-327c44010ad0/report.json`. Report ghi revision, source dirty lúc chạy, thời gian và module root; JUnit ghi số frame/tamper/hash, không ghi khóa/ticket. Profile browser, chứng thư/private key và file thử được dọn theo fixture; runtime không đưa vào commit.
+
+Giới hạn: thử localhost Windows, server/relay được tin cậy, **không E2EE**. Không chạy lại LAN, tải 10/20 client hoặc file lớn trong lượt security. Ca **256 MiB vẫn giữ kết quả FAIL do timeout 300 giây** của nhánh review; không sửa pacing/thuật toán/timeout hoặc diễn giải ca đó là đạt. UI và ACK/COMPLETE giữ quy tắc chưa xác định kết quả khi thiếu xác nhận. Python thu hồi context về mặt logic, không cam kết xóa vật lý mọi bản sao khóa trong RAM.
+
+## Bàn giao 6 việc kiểm thử Windows — 2026-11-13
+
+Base HEAD và upstream/main sau fetch đều **5249f106554a3300fae4798c39ada7bfdf70e0b3**; nhánh `review/main-integration-20261113` có thay đổi local, chưa commit. Giữ 6 file review đầu. Không sửa production P1/P2/shared/bridge/UI/security; chỉ runner, test, cấu hình và tài liệu. Hướng dẫn hiện hành: [testing.md](testing.md); các mốc phía dưới là lịch sử.
+
+| Việc | Kết quả thực chạy |
+| --- | --- |
+| 1. Runner/Windows CI cùng checkout | Local PASS: mặc định independent → ui → integrated, ghi HEAD/local changes/module path/hash; ticket từ P2 FILE_SESSION thật. Workflow Windows/Python 3.14 tách main và legacy. **Windows CI mới chưa chạy** vì chưa push |
+| 2. Import main/reference | PASS: pytest/fixture tham chiếu chạy process riêng, conftest loại legacy khỏi mặc định; giữ guard nguồn module. Tái hiện cũ giờ 12 passed, 6 deselected, 44 subtests/0,20s; main rồi legacy cùng một lệnh đạt |
+| 3. Cổng và cleanup | PASS: server test mở TCP/UDP port 0, truyền cổng thực cho client; fixture HTTP cũng port 0. Không đổi default production, không dừng listener có sẵn. Main browser dùng HTTP 63399/TCP 63398/UDP 57645; load TCP 58385/UDP 61420 |
+| 4. Ngắt DATA / FIN / COMPLETE | PASS 3 ca/4,275s, 6,543s, 7,300s: không sender-completed giả, dọn partial; COMPLETE cho phép receiver đã verify nhưng sender unknown khi ngắt. Hai client khác vẫn chat được; cleanup đạt |
+| 5. File lớn / giới hạn | 32 MiB PASS hash/cleanup. Đúng 256 MiB admission/reject/cleanup PASS; 256 MiB + 1 byte bị chặn trước body/staging. **Truyền trọn 256 MiB FAIL do timeout 300 giây**, không báo hoàn tất giả, cleanup đạt; không nằm trong CI mặc định |
+| 6. 10/20 client và file/chat | PASS login 10/10, 20/20 và LIST_ONLINE ở từng client. 50 tin/450 lượt nhận; 100 tin/1.900 lượt nhận; 0 thiếu/trùng/sai. Thời gian 22,457s và 23,674s, gồm quan sát/đóng nửa client/reconnect. Ca 4 client/file 2 MiB/chat được siết thêm: mỗi tin đã đến cả 3 người nhận khi file còn transferring và chưa đủ byte |
+
+Lệnh bàn giao, từ `A1_Client-Server`:
+
+```powershell
+.\.venv\Scripts\python.exe -B p3.py check
+.\.venv\Scripts\python.exe -B p3.py check --suite large --file-mib 32 --timeout 180
+.\.venv\Scripts\python.exe -B p3.py check --suite large --file-mib 256 --timeout 370
+.\.venv\Scripts\python.exe -B p3.py check --suite load --timeout 240
+```
+
+### Bằng chứng và cách hiểu kết quả
+
+- Hồi quy cuối trước khi siết assertion chat: **check-eea915cff0074259aebd835871234b2b**, PASS/335,248s, lệnh `p3.py check --suite all p1 p2 --timeout 600`. Independent 113 Python/19,057s; UI/6,827s; integrated 180 Python + 58 subtests và browser thật/182,630s; legacy P1 5 pytest + 35 unittest và browser fixture/43,870s; legacy P2 1 pytest và browser/82,802s. **293 Python main không lặp**, 6 pytest legacy báo riêng; không skip trong các nhóm được chọn. Audit 8 JSON đạt, Ruff/format/JS/helper/Windows Job Object đạt.
+- UI 234 kiểm tra mỗi desktop 1440×900/1366×768/1100×750, 238 mobile; demo 33+37 mỗi desktop/mobile. Browser main hai profile thật đạt login/chat/online/file hai chiều/accept/reject/download/hash/reconnect. Mxx và ticket fixture không thay kết quả FILE_SESSION thật.
+- Load **check-5932bc3f75864185a20d360deff635aa**, PASS/58,04s. Server PID 34740 dừng bình thường, exit 0, không forced; `load/*/results.json` có kỳ vọng/thực nhận, ACK, snapshot online, thời gian và lỗi. Phần file/chat 4 client ban đầu 5,32s; kiểm tra overlap chặt hơn được chạy riêng dưới đây, không chạy lại 10/20 client.
+- File 32 MiB cuối **check-794088348f104cd38c2f9d242a4329e6**, PASS/92,478s; phần truyền 86,565s; sender completed, 33.554.432 byte, cleanup True. Hash `e09320c5b00b34bb704802136c599a95b3996332ba84d7c7f21112b6231b6bd0`. Ca admission/oversize riêng cũng đạt. Lượt đầu 0bb03… PASS trước khi thêm poll định kỳ; giữ lịch sử, dùng lượt cuối làm bằng chứng hiện hành.
+- File 256 MiB **check-8f61febbc6ee45f39f4431c6b99528c1**, **FAIL/306,569s**, exit 1: admission/oversize PASS, full-transfer FAIL sau **300,333s**, mới ACK **115.405.824/268.435.456 byte**, sender unknown, cleanup True và staging run đã dọn. Không có file nhận hoàn tất để khẳng định hash. Đây là lỗi/giới hạn production, không phải ca SKIP hoặc chưa chạy.
+- Lượt hoàn tất chỉ chạy lại test bị siết: `pytest tests/test_integrated_edges.py -m load -q`, **1 passed, 5 deselected/7,66s**; `runtime/review-main/concurrency-tight.xml` ghi 5 tin đến đủ 3 người nhận khi sender vẫn transferring, đã ACK 50.176–135.168/2.097.152 byte, sau đó file hoàn tất/hash đúng. Browser thật qua fixture integrated, **runtime/p3/overlap/check-0cf9ca6af8014d49a02e3d38e0cb6839**, PASS; browser run integrated-214f59be-10e6-4a57-a974-a5ed695103e6 ghi chat đã đến DOM khi file còn transferring ở **93.184/8.388.608 byte**. Không chạy lại 10/20 client, file lớn hay toàn bộ hồi quy trong lượt hoàn tất này.
+- Encoding: bản HEAD của docs/testing.md vốn đúng UTF-8; bản local bị mất dấu khi ghi qua pipeline PowerShell đã được khôi phục bằng ghi trực tiếp UTF-8. README, testing, test-plan và review-main đều decode UTF-8 nghiêm ngặt; không có U+FFFD hoặc mẫu chữ bị thay dấu thành `?` sau kiểm tra. Ruff/format cho test Python bị sửa, JS syntax và diff check đạt.
+- Các run trên ở `runtime/p3/checks/<run-ID>/`: report.json, log, XML, nguồn module và ảnh browser. Payload lớn/profile/token/ticket/key không đưa vào diff. SKIP/Not selected chỉ là suite không chọn; pytest deselected là nhóm chủ động loại. GitHub CI mới là **Chưa chạy**, không suy ra từ local PASS.
+
+### Lỗi production giữ nguyên để nhóm duyệt
+
+`p1/client.py:FileClient` mặc định pacing 0,002 giây/chunk 1.024 byte và `send_file(timeout=300)`. `bridge_files.py:_send` gọi API đó mà không truyền timeout khác. Riêng nhịp DATA 256 MiB đã cần tối thiểu 524,288 giây, chưa kể I/O/ACK. Ca cuối poll HTTP 2 giây/lần, giữ phiên thật nên failure trên không phải guard browser bỏ phiên.
+
+Đề xuất tối thiểu, **chưa sửa**: cho phép cấu hình timeout tại điểm gọi FileClient.send_file hiện có, chọn ngân sách phù hợp cho file lớn và timeout runner tương ứng; chốt với P1/P3 trước khi sửa. Không cần đổi protocol hoặc thuật toán để xử lý riêng giới hạn timeout này.
+
+### Lượt lỗi harness đã phân biệt
+
+- check-a10af…: thêm một tầng UUID làm đường dẫn Chrome quá dài trên Windows. Đã bỏ tầng lồng khi caller có run ID; fd225… và hồi quy cuối UI PASS.
+- check-6e69…: test lâu không poll, bridge đóng theo guard 90 giây; test chờ terminal đến 310 giây. Đã sửa harness poll định kỳ, không tắt guard production. Không dùng lượt này để kết luận lỗi P1; 8f61… là lượt xác nhận timeout thật.
+- COMPLETE ban đầu đọc unknown từ record backend đã đóng. Đã đối chiếu reducer: unknown do UI xử lý connection.changed. Test replay sự kiện thật qua reducer, thêm đúng connecting local của adapter; không đổi contract. Cả 3 pha đạt trong hồi quy cuối.
+- Khi siết overlap, assertion đầu gặp trạng thái transferring ở 0 byte (sự kiện bắt đầu hợp lệ). Test đã chờ ACK byte đầu tiên trước khi gửi chat, rồi kiểm tra trạng thái/byte ngay sau khi cả 3 client nhận tin; không đổi trạng thái hoặc pacing production.
+
+**Bước 8 còn chờ:** UI chưa tuyên bố đã mã hóa; AES-GCM 29 unit test độc lập không chứng minh encrypt/decrypt trên chat/file. Security v2, TLS, InvalidTag/replay/vòng đời khóa trên mạng chưa triển khai/chưa chạy. Không mở rộng Linux/WSL, Docker, public hoặc LAN nhiều máy.
+
+## Review main tích hợp — 2026-11-13
+
+Nguồn: **5249f106554a3300fae4798c39ada7bfdf70e0b3**, nhánh local `review/main-integration-20261113`, worktree `MMT-P3-review-20261113`; Windows/Python 3.14.4. Chi tiết lệnh, PID/cổng, lỗi, diff và ảnh ở [review-main-20261113.md](review-main-20261113.md). Kết quả dưới đây tách khỏi lịch sử backend tham chiếu b085721/fbf53eb và demo Mxx.
+
+| Nhóm thực chạy | Kết quả |
+| --- | --- |
+| Pytest main cùng checkout, loại riêng legacy fallback | PASS **293 tests + 58 subtests**, không skip, 148,97s; main-only.xml/main-only.log. CONNECT_P1_ROOT/CONNECT_P2_ROOT đều ROOT; gồm 6 ca tích hợp P3 mới |
+| Hai phiên Chrome thật qua server/relay/bridge cùng main | PASS, run integrated-275453e5-8412-45de-8b1d-f83493d28bb6; login, chat chung/riêng hai chiều, online/offline, giữ nháp của peer và reconnect |
+| File qua ticket P2 FILE_SESSION thật | PASS: A→B 8 MiB, cùng tên/Unicode 28 byte, B→A 262.147 byte, file rỗng, accept/reject, progress byte thật, browser download/hash, chat trong khi truyền |
+| Ngắt khi chờ chấp nhận | PASS: không completed giả; A unknown, B failed từ relay, B giữ chat/nháp, A login lại và chat tiếp |
+| UI regression độc lập | PASS check-d5c14112779f45278a96585ca1909956: 234 mỗi desktop 1440×900/1366×768/1100×750, 238 mobile; demo riêng 33+37 mỗi desktop/mobile |
+| Fallback server cũ không FILE_SESSION | PASS 1 test, P2 fbf53eb, process riêng, nhãn legacy; không tính là nghiệm thu file main |
+| p3.py chọn main làm p1/p2 reference | FAIL đúng guard revision; runner/CI vẫn ghim bản cũ, chưa có suite main integrated |
+| Import trộn main + reference P1 | Tái hiện 12 passed, 1 error, 44 subtests; load_p1 phát hiện shared.protocol khác ROOT. Không bỏ guard; dùng ROOT cho main, process riêng cho legacy |
+| AES-GCM mạng | Chưa nối: chat JSON plaintext; UDP HMAC/SHA-256; primitive độc lập giữ nguyên. Security v2 vẫn draft |
+
+Report/ảnh local bị Git ignore; chỉ test và tài liệu review nằm trong diff. Các lệnh/kết quả cũ bên dưới là lịch sử, không thay thế nghiệm thu main hiện tại. Không sửa production, không push/PR.
+
 Môi trường được hỗ trợ: **Windows/Python 3.14**. Hướng dẫn thực hiện hiện hành: [testing.md](testing.md). Dùng `python -B p3.py check --suite ...`; output theo UUID, không dùng đường dẫn evidence cố định theo ngày trong các lệnh lịch sử bên dưới. Source/revision và kết quả CI phải đọc từ report/run thực tế; Security v2 vẫn draft.
 
 ## Thu gọn về Windows — 2026-11-12

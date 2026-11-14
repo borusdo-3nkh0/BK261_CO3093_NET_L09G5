@@ -5,6 +5,7 @@ import json
 import secrets
 import select
 import socket
+import ssl
 import threading
 import time
 import uuid
@@ -15,18 +16,20 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
 from bridge_files import FileService, load_p1
+from security.context import Context, chat_aad
+from security.tls import client_context, server_context
 
 WEB = Path(__file__).resolve().parent / "web"
 TIMEOUT = 10
 MAX_FRAME = 1024  # P2 receive_line limit, including the terminating newline.
 ONLINE_INTERVAL = 5
-MAX_RESPONSE = 8192
+MAX_RESPONSE = 32768
 STORAGE = Path(__file__).resolve().parent / "runtime" / "files"
 
 
-def encode(data):
+def encode(data, *, max_frame=MAX_FRAME):
     frame = (json.dumps(data, ensure_ascii=False) + "\n").encode("utf-8")
-    if len(frame) > MAX_FRAME:
+    if len(frame) > max_frame:
         raise ValueError("Yêu cầu vượt giới hạn 1.024 byte của máy chủ.")
     return frame
 
@@ -44,7 +47,10 @@ def read_line(sock):
 
 
 class Session:
-    def __init__(self, session_id, file_factory=None, storage=STORAGE):
+    def __init__(
+        self, session_id, file_factory=None, storage=STORAGE, tls_context=None
+    ):
+        self.tls_context, self.crypto = tls_context, None
         self.session_id = session_id
         self.condition = threading.Condition(threading.RLock())
         self.events = deque(maxlen=256)
@@ -85,6 +91,7 @@ class Session:
                 "mode": "live",
                 "state": state,
                 "selfUserId": self.username,
+                "security": "tls-aesgcm" if self.connected and self.crypto else None,
                 "error": error,
             },
         )
@@ -188,8 +195,14 @@ class Session:
                     {"action": "LOGIN", "username": username, "password": password}
                 )
                 self.sock = socket.create_connection(target, timeout=TIMEOUT)
-                self.sock.sendall(b"HELLO\n")
-                if read_line(self.sock) != b"WELCOME\n":
+                if self.tls_context:
+                    self.sock = self.tls_context.wrap_socket(
+                        self.sock, server_hostname=target[0]
+                    )
+                self.sock.sendall(b"HELLO2\n" if self.tls_context else b"HELLO\n")
+                if read_line(self.sock) != (
+                    b"WELCOME2\n" if self.tls_context else b"WELCOME\n"
+                ):
                     raise ValueError("Invalid handshake")
                 self.sock.sendall(frame)
                 reply = json.loads(read_line(self.sock))
@@ -197,6 +210,8 @@ class Session:
                     code = reply.get("status", "LOGIN_FAILED")
                     self.end("disconnected", code, "Đăng nhập không thành công.")
                     return
+                if self.tls_context:
+                    self.crypto = Context(reply.get("security", {}))
                 self.username = username
                 self.connected = True
                 self.users[username] = {
@@ -217,6 +232,12 @@ class Session:
                 )
                 self.refresh_online()
                 threading.Thread(target=self.receive, daemon=True).start()
+            except ssl.SSLCertVerificationError:
+                self.end(
+                    "disconnected",
+                    "TLS_VERIFY_FAILED",
+                    "Không thể xác minh chứng thư máy chủ. Kiểm tra CA và địa chỉ kết nối.",
+                )
             except (OSError, ValueError, TypeError, AttributeError):
                 self.end(
                     "disconnected",
@@ -234,6 +255,8 @@ class Session:
                 self.sock.close()
                 self.sock = None
             self.connected = False
+            if self.crypto:
+                self.crypto.close()
             self.pending = None
             if self.files:
                 self.files.close_async()
@@ -270,10 +293,21 @@ class Session:
             )
         ):
             raise ValueError("Tin nhắn hoặc người nhận không hợp lệ.")
+        wire_text = (
+            self.crypto.encrypt_text(
+                text,
+                chat_aad(
+                    "UNICAST" if recipient else "BROADCAST", self.username, recipient
+                ),
+            )
+            if self.crypto
+            else text
+        )
         frame = encode(
-            {"action": "BROADCAST", "message": text}
+            {"action": "BROADCAST", "message": wire_text}
             if recipient is None
-            else {"action": "UNICAST", "recipient": recipient, "message": text}
+            else {"action": "UNICAST", "recipient": recipient, "message": wire_text},
+            max_frame=32768 if self.tls_context else MAX_FRAME,
         )
         with self.condition:
             # Automatic refresh waits ahead of this send; no second TCP request.
@@ -324,6 +358,10 @@ class Session:
             raise ValueError("Invalid server response")
         if packet.get("type") in {"BROADCAST", "UNICAST"}:
             sender, text = packet.get("sender"), packet.get("message")
+            if self.crypto:
+                text = self.crypto.decrypt_text(
+                    text, chat_aad(packet["type"], sender, packet.get("recipient"))
+                )
             private = packet["type"] == "UNICAST"
             if (
                 not isinstance(sender, str)
@@ -373,6 +411,7 @@ class Session:
                     ticket, port = packet.get("ticket"), packet.get("udp_port")
                     if (
                         not isinstance(ticket, dict)
+                        or (self.tls_context is not None and ticket.get("version") != 2)
                         or ticket.get("username") != self.username
                         or not isinstance(ticket.get("key"), str)
                         or len(ticket["key"]) != 64
@@ -446,7 +485,12 @@ class Session:
                 return
             action = "UNICAST" if message["recipientId"] is not None else "BROADCAST"
             status = packet.get("status")
-            allowed = {f"{action}_SUCCESS", "INVALID_REQUEST", "AUTH_REQUIRED"}
+            allowed = {
+                f"{action}_SUCCESS",
+                "INVALID_REQUEST",
+                "AUTH_REQUIRED",
+                "SECURITY_FAILED",
+            }
             if action == "UNICAST":
                 allowed.add("UNICAST_FAILED")
             if status not in allowed:
@@ -484,7 +528,10 @@ class Session:
                         raise TimeoutError("Browser abandoned session")
                     self.refresh_files()
                     self.refresh_online()
-                if not select.select([sock], [], [], 0.2)[0]:
+                if (
+                    not (self.tls_context and sock.pending())
+                    and not select.select([sock], [], [], 0.2)[0]
+                ):
                     continue
                 part = sock.recv(4096)
                 if not part:
@@ -527,12 +574,53 @@ class Session:
 class BridgeServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address, target, *, file_factory=None, storage=STORAGE):
+    def __init__(
+        self,
+        address,
+        target,
+        *,
+        file_factory=None,
+        storage=STORAGE,
+        tls_context=None,
+        https_context=None,
+    ):
         super().__init__(address, Handler)
+        self.https = https_context is not None
+        if https_context:
+            self.socket = https_context.wrap_socket(
+                self.socket, server_side=True, do_handshake_on_connect=False
+            )
+        self.tls_context = tls_context
         self.target = target
         self.sessions = {}
         self.sessions_lock = threading.Lock()
         self.file_factory, self.storage = file_factory, storage
+
+    def register(self, username, password):
+        if (
+            not isinstance(username, str)
+            or not username.strip()
+            or not isinstance(password, str)
+            or not password
+        ):
+            raise ValueError("Nhập tên đăng nhập và mật khẩu hợp lệ.")
+        frame = encode(dict(action="REGISTER", username=username, password=password))
+        if self.tls_context is None:
+            raise ValueError("Đăng ký cần kết nối bảo mật tới máy chủ.")
+        with socket.create_connection(self.target, timeout=TIMEOUT) as raw:
+            with self.tls_context.wrap_socket(
+                raw, server_hostname=self.target[0]
+            ) as sock:
+                sock.sendall(b"HELLO2\n")
+                if read_line(sock) != b"WELCOME2\n":
+                    raise ValueError("Không thể đăng ký lúc này. Hãy thử lại sau.")
+                sock.sendall(frame)
+                reply = json.loads(read_line(sock))
+        status = reply.get("status") if isinstance(reply, dict) else None
+        if status not in {"REGISTER_SUCCESS", "REGISTER_FAILED"}:
+            raise ValueError("Dữ liệu đăng ký không hợp lệ hoặc máy chủ chưa sẵn sàng.")
+        # With the validated input above, P2 REGISTER_FAILED means an existing username.
+        return {"status": status}
 
     def server_close(self):
         for session in list(self.sessions.values()):
@@ -548,6 +636,7 @@ class BridgeServer(ThreadingHTTPServer):
 class Handler(SimpleHTTPRequestHandler):
     def handle(self):
         try:
+            self.connection.settimeout(TIMEOUT)
             super().handle()
         except (ConnectionResetError, BrokenPipeError):
             pass  # Closing a tab may reset an idle HTTP connection.
@@ -562,7 +651,7 @@ class Handler(SimpleHTTPRequestHandler):
         host = f"127.0.0.1:{self.server.server_port}"
         return self.headers.get("Host") == host and self.headers.get("Origin") in (
             None,
-            f"http://{host}",
+            f"{'https' if self.server.https else 'http'}://{host}",
         )
 
     def respond(self, data, status=200):
@@ -647,7 +736,11 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Yêu cầu phải là đối tượng JSON.")
-            if self.path == "/api/connect":
+            if self.path == "/api/register":
+                self.respond(
+                    self.server.register(body.get("username"), body.get("password"))
+                )
+            elif self.path == "/api/connect":
                 session_id = str(uuid.UUID(body.get("sessionId", "")))
                 username, password = body.get("username"), body.get("password")
                 if (
@@ -658,7 +751,10 @@ class Handler(SimpleHTTPRequestHandler):
                 ):
                     raise ValueError("Nhập tên đăng nhập và mật khẩu.")
                 session = Session(
-                    session_id, self.server.file_factory, self.server.storage
+                    session_id,
+                    self.server.file_factory,
+                    self.server.storage,
+                    self.server.tls_context,
                 )
                 with self.server.sessions_lock:
                     for token, old in list(self.server.sessions.items()):
@@ -693,6 +789,8 @@ class Handler(SimpleHTTPRequestHandler):
                     )
             else:
                 self.respond({"error": "Không có thao tác này."}, 404)
+        except ssl.SSLCertVerificationError:
+            self.respond({"error": "Không thể xác minh chứng thư máy chủ."}, 503)
         except (ValueError, TypeError, AttributeError) as exc:
             # Parser errors can contain input; only our validation messages are public.
             message = (
@@ -741,14 +839,25 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--p2-port", type=int, default=5000)
     parser.add_argument(
-        "--p1-root", type=Path, help="P1 A1_Client-Server checkout; no ticket/key files"
+        "--p1-root",
+        type=Path,
+        default=Path("."),
+        help="P1 A1_Client-Server checkout; no ticket/key files",
     )
+    parser.add_argument("--ca", type=Path, default=Path("runtime/tls/ca.pem"))
+    parser.add_argument("--cert", type=Path, default=Path("runtime/tls/server.pem"))
+    parser.add_argument("--key", type=Path, default=Path("runtime/tls/server.key"))
     args = parser.parse_args()
+    tls = client_context(args.ca)
     factory = load_p1(args.p1_root) if args.p1_root else None
     with BridgeServer(
-        ("127.0.0.1", args.port), ("127.0.0.1", args.p2_port), file_factory=factory
+        ("127.0.0.1", args.port),
+        ("127.0.0.1", args.p2_port),
+        file_factory=factory,
+        tls_context=tls,
+        https_context=server_context(args.cert, args.key),
     ) as server:
-        print(f"Connect: http://127.0.0.1:{server.server_port}/", flush=True)
+        print(f"Connect: https://127.0.0.1:{server.server_port}/", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

@@ -9,7 +9,7 @@ from server.socket_server import SocketServer
 
 class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_unicast_requires_authentication(self):
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
 
@@ -60,7 +60,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_broadcast_requires_authentication(self):
         """Unauthenticated clients cannot broadcast messages."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
 
@@ -112,7 +112,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_register_request_through_dispatcher(self):
         """REGISTER should work through RequestDispatcher."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
 
@@ -186,7 +186,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_login_request_through_dispatcher(self):
         """LOGIN should create session and router registration."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         username = "login_test_user"
         password = "demo123"
@@ -308,7 +308,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_unicast_to_offline_user(self):
         """Authenticated UNICAST to offline Bob returns UNICAST_FAILED."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
 
@@ -385,7 +385,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_broadcast_after_login_without_recipients(self):
         """Authenticated BROADCAST returns MESSAGE_NOT_IMPLEMENTED."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
 
@@ -469,7 +469,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_invalid_json_request(self):
         """Server should reject malformed JSON without crashing."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
 
@@ -522,7 +522,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_unsupported_action_request(self):
         """Server should reject unsupported actions."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
 
@@ -576,7 +576,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
 
     def test_unicast_between_two_authenticated_clients(self):
         """Alice sends a UNICAST and Bob receives the exact payload."""
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
         self.assertTrue(server.auth_manager.register("bob", "demo123"))
 
@@ -662,7 +662,7 @@ class TestRequestDispatcherIntegration(unittest.TestCase):
     def test_broadcast_between_three_authenticated_clients(self):
         """Alice broadcasts to Bob and Charlie."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         for username in ("alice", "bob", "charlie"):
             self.assertTrue(server.auth_manager.register(username, "demo123"))

@@ -9,8 +9,12 @@ import time
 import uuid
 from dataclasses import dataclass, replace
 
+from security.context import new_material
+from security.udp import PacketCodec
 from shared.protocol import (
+    CHUNK_SIZE,
     MAX_DATAGRAM,
+    SECURE_CHUNK_SIZE,
     FileOffer,
     Packet,
     ProtocolError,
@@ -31,6 +35,7 @@ class _Peer:
     ticket: SessionTicket
     endpoint: object = None
     challenge: object = None
+    codec: object = None
 
 
 @dataclass
@@ -55,6 +60,7 @@ class FileRelay:
         max_sessions=20,
         max_transfers=64,
         per_client_limit=8,
+        secure=False,
     ):
         if any(not math.isfinite(t) or t <= 0 for t in (idle_timeout, receipt_ttl)):
             raise ValueError("Timeouts must be positive and finite")
@@ -63,6 +69,7 @@ class FileRelay:
             for n in (max_sessions, max_transfers, per_client_limit)
         ):
             raise ValueError("Limits must be positive")
+        self.secure = secure
         self.host, self.port = host, port
         self.idle_timeout, self.receipt_ttl = idle_timeout, receipt_ttl
         self.max_sessions, self.max_transfers = max_sessions, max_transfers
@@ -81,9 +88,18 @@ class FileRelay:
 
     def register_session(self, username, *, ticket=None):
         """Call only after P2 authenticates the user. Never expose other tickets."""
-        ticket = ticket or SessionTicket(
-            username, uuid.uuid4(), secrets.token_bytes(32)
-        )
+        if ticket is None:
+            material = new_material()
+            ticket = SessionTicket(
+                username,
+                uuid.UUID(material["session_id"]),
+                secrets.token_bytes(32),
+                2 if self.secure else 1,
+                bytes.fromhex(material["c2s"]) if self.secure else b"",
+                bytes.fromhex(material["s2c"]) if self.secure else b"",
+            )
+        if (ticket.version == 2) != self.secure:
+            raise ValueError("Ticket and relay security modes differ")
         if ticket.username != username:
             raise ValueError("Ticket owner mismatch")
         with self._lock:
@@ -91,7 +107,9 @@ class FileRelay:
                 raise ValueError("Session already registered")
             if len(self._peers) >= self.max_sessions:
                 raise ValueError("Session limit reached")
-            self._peers[ticket.session_id] = _Peer(ticket)
+            self._peers[ticket.session_id] = _Peer(
+                ticket, codec=PacketCodec(ticket, server=True) if self.secure else None
+            )
             self._usernames[username] = ticket.session_id
         return ticket
 
@@ -100,7 +118,9 @@ class FileRelay:
             session = self._usernames.pop(username, None)
             if session is None:
                 return
-            self._peers.pop(session)
+            peer = self._peers.pop(session)
+            if peer.codec:
+                peer.codec.context.close()
             outputs = []
             for transfer_id, transfer in self._transfers.items():
                 if session in (
@@ -146,6 +166,12 @@ class FileRelay:
         if self._socket is not None:
             self._socket.close()
             self._socket = None
+        with self._lock:
+            for peer in self._peers.values():
+                if peer.codec:
+                    peer.codec.context.close()
+            self._peers.clear()
+            self._usernames.clear()
 
     def __enter__(self):
         return self.start()
@@ -166,7 +192,11 @@ class FileRelay:
                     peer = self._peers.get(session)
                     if peer is None:
                         continue
-                    packet = decode_packet(data, peer.ticket.key)
+                    packet = (
+                        peer.codec.decode(data)
+                        if peer.codec
+                        else decode_packet(data, peer.ticket.key)
+                    )
                     outputs = self._handle(peer, packet, endpoint)
                 self._deliver(outputs)
             except socket.timeout:
@@ -193,8 +223,11 @@ class FileRelay:
                 endpoint = output[2] if len(output) == 3 else peer.endpoint
                 if endpoint is None:
                     continue
-                data = encode_packet(
-                    replace(packet, session_id=session), peer.ticket.key
+                packet = replace(packet, session_id=session)
+                data = (
+                    peer.codec.encode(packet)
+                    if peer.codec
+                    else encode_packet(packet, peer.ticket.key)
                 )
             try:
                 if self._socket is not None:
@@ -264,6 +297,10 @@ class FileRelay:
                 offer = FileOffer.from_bytes(
                     packet.payload, sender=peer.ticket.username
                 )
+                if offer.chunk_size != (
+                    SECURE_CHUNK_SIZE if self.secure else CHUNK_SIZE
+                ):
+                    raise ProtocolError("Incompatible chunk version")
             except ProtocolError:
                 return reply(Kind.ERROR, b"INVALID_METADATA")
             transfer = self._transfers.get(transfer_id)

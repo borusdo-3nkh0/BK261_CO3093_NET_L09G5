@@ -1,5 +1,19 @@
 # Integration Guide — P1, P2 and P3
 
+## Hết hạn chờ Accept — P3 local, 2026-11-14
+
+Đối chiếu P1 hiện tại: `send_file()` gọi `_control_exchange(OFFER)` trước `_send_chunks`. Lỗi chính xác `OFFER retry limit exceeded` xác nhận chưa qua Accept/chưa gửi DATA. P3 ánh xạ lỗi này, khi chưa có progress bước DATA, thành failed/`ACCEPT_TIMEOUT`: **Thất bại — hết thời gian chờ người nhận chấp nhận.** Không ánh xạ `FIN retry limit exceeded`, `DATA retry limit exceeded` hoặc deadline chung thành lỗi Accept; chúng vẫn có thể unknown.
+
+P1 gửi CANCEL với payload **SENDER_FAILED**, không mang nguyên nhân OFFER timeout sang người nhận. Test UDP v2 thật đã xác nhận điều này. Với SENDER_FAILED, P3 phía nhận giữ lỗi chung, không suy đoán Accept timeout. Nếu P1 phía nhận tự phát `TRANSFER_EXPIRED` khi record vẫn đang chờ Accept/chưa accept thì đủ căn cứ dùng ACCEPT_TIMEOUT; sau Accept thì không dùng thông báo đó. Muốn hai đầu luôn có cùng nguyên nhân ở ca sender hết lượt OFFER, P1 cần cung cấp nguyên nhân/phase kết thúc rõ hơn cho recipient; lượt này không sửa hay đề xuất packet mới.
+
+`transfer.upsert.sendPending` là metadata vòng đời nội bộ P3, không phải packet P1/P2: true khi tác vụ gửi còn trong hàng đợi/worker, false chỉ sau worker thoát và staging/quota đã dọn. Terminal event gửi được hoãn tới mốc này. Unknown vẫn là unknown; false chỉ cho phép chọn file mới, không tự retry hay sửa trạng thái thẻ cũ.
+
+> Security hiện hành (feature/p3-security, 2026-11-13): các entry point P2/bridge bắt buộc TLS/HTTPS có chứng thư, LOGIN cấp context chat; FILE_SESSION cấp ticket v2/AES file, relay và client dùng codec v2. Xem README/protocol và bằng chứng test-plan. Legacy constructors/checkout chỉ dùng fixture hồi quy, không fallback trên endpoint thật. Các ghi chép cũ về security chỉ độc lập/draft bên dưới là lịch sử.
+
+## Đăng ký Web hiện hành — 2026-11-14
+
+UI gọi `createP2Adapter.register({username, password})` → POST HTTPS `/api/register` với JSON body. Bridge mở kết nối TLS riêng, xác minh CA/hostname, HELLO2/WELCOME2 rồi gửi REGISTER JSON newline hiện có của P2. Chỉ trả status REGISTER_SUCCESS/REGISTER_FAILED; không tạo session/token/ticket hoặc tự LOGIN. Username có ký tự không phải khoảng trắng và password không rỗng theo P2; với input hợp lệ, REGISTER_FAILED nghĩa là username đã tồn tại. Giới hạn frame xác thực hiện có của bridge là 1.024 byte. Không sửa protocol hoặc lưu account trong P3; account RAM P2 mất khi restart. Các ghi chép cũ “REGISTER ngoài UI” bên dưới là lịch sử. UI báo lỗi cố định, xóa mật khẩu khi submit/đổi chế độ/đóng hộp, không URL/storage/log; xem README và mốc đăng ký trong test-plan.
+
 ## Current integration status — 2026-11-12
 
 This document combines the P1/P2 integration contract and

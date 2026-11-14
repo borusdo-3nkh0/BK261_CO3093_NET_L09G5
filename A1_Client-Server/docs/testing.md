@@ -1,72 +1,91 @@
-# Kiểm thử P3 hiện hành
+# Kiểm thử P3 trên Windows
 
-Môi trường được hỗ trợ: **Windows, PowerShell, Python 3.14 và Node 24+**. Chạy từ `A1_Client-Server`. Cài `python -m pip install --group dev` trong venv; dùng `.venv\Scripts\python.exe` thay `python` nếu chưa activate. `CHROME_BIN` tùy chọn chỉ Chrome/Chromium/Edge trên Windows; CI dùng Chrome có sẵn trên runner. Không dùng credentials thật.
+Chạy từ `A1_Client-Server`, dùng Windows/PowerShell, Python 3.14, Node 24+ và Chrome/Edge. Cài dependency trong venv bằng `python -m pip install --group dev`. Không dùng tài khoản hoặc dữ liệu nhạy cảm.
 
-## Điểm chạy tổng hợp
-
-```powershell
-python -B p3.py check --suite independent
-python -B p3.py check --suite ui
-python -B p3.py check --suite p1 --p1-root ../../MMT-P1/A1_Client-Server
-python -B p3.py check --suite p2 --p2-root ../../MMT-P2/A1_Client-Server
-python -B p3.py check --suite all --timeout 600
-```
-
-Đường dẫn tham chiếu tùy chọn qua CONNECT_P1_ROOT/CONNECT_P2_ROOT. Revision ghim trong p3.py: P1 b08572182705912b32b639ca3e8bc150265c4954; P2 fbf53eb35583ea9eabd9639acaf59fbab4675567. Dùng checkout riêng, không reset/ghi đè checkout thành viên. Revision khác phải được duyệt và cập nhật cả runner/CI.
-
-| Suite | Phạm vi thật | Điều kiện |
-| --- | --- | --- |
-| independent | pytest độc lập, Ruff, JS syntax và test helper runner | Không cần P1/P2 hoặc browser; cần Node cho JS |
-| ui | UI chính thức + demo qua HTTP localhost, 4 viewport | Không backend thật; test adapter trong tests, demo trong local-demo; cần browser |
-| p1 | pytest bridge với P1 UDP, 35 unittest P1 gốc, browser gửi/nhận file thật | Auth và FILE_SESSION là **fixture**; không gọi đây là P2 thật |
-| p2 | pytest dependency FILE_SESSION, server SocketServer P2 thật, Web/TCP login/chat/online | P2 ghim chưa hỗ trợ file; bộ ACK relay chỉ là thiết bị thử |
-
-Suite không chọn: SKIP, lý do Not selected. Suite chọn thiếu dependency/revision sai: FAIL và exit 1. Tích hợp thu toàn skip/không có testcase cũng FAIL. Chỉ PASS khi các bước được chọn hoàn tất; không gộp demo vào kết quả IT hệ thống. Lỗi tham số CLI exit 2. Timeout tổng mặc định 600 giây cho các bước, cộng thời gian dọn hữu hạn; chỉ dừng process/nhóm process và server do lượt chạy tạo, không đụng server 5000/8766 đang dùng.
-
-Windows dùng Job Object kill-on-close, supervisor gia nhập job trước khi chạy venv shim; đóng job dọn cả process con còn sống sau khi process cha thoát. Runner dùng taskkill cho cây process do mình tạo và giữ xử lý Ctrl+C. Test hợp đồng Windows luôn được chạy; các ca P1/P2 bắt buộc vẫn phải thực chạy.
-
-Mỗi lượt có `runtime/p3/checks/check-<UUID>/report.json`, status/thời gian/lý do và nguồn/revision, log đã lọc, JUnit XML, report browser riêng và ảnh lỗi khi CDP còn hoạt động. `--output` đổi thư mục gốc, không ghi đè lượt cũ. Không upload profile Chrome, file đầu vào/tải về, packet dump, môi trường hoặc ticket; runner xóa profile/file mẫu sau chạy. Kiểm tra canary xác nhận redaction token/ticket/key/password; audit JSON chạy trước báo PASS. Đây không phải công cụ dò mọi loại bí mật tùy ý: chỉ chạy với account/payload thử công khai.
-
-## Demo một lệnh và kiểm thử thủ công
+## Một lệnh thông thường
 
 ```powershell
-python -B p3.py demo
+.\.venv\Scripts\python.exe -B p3.py check
 ```
 
-Mở URL `/local-demo/` được in ra (mặc định http://127.0.0.1:8765/local-demo/). Có nhãn **Chế độ mô phỏng**; không tạo ticket hay kết nối P2. Ctrl+C dừng. Nếu cổng bận, dùng `--port 0` hoặc cổng khác; không tự dừng listener cũ.
+Mặc định tương đương `--suite all`: `independent` → `ui` → `integrated` → `security`. Nhóm đầu kiểm P3 độc lập/Ruff/JS; integrated không thu lại các file của independent/security. Integrated dùng P1/P2/P3 **cùng checkout**, TLS/HTTPS và ticket v2 do P2 thật cấp qua FILE_SESSION; gồm test DATA/FIN/COMPLETE và hai phiên Chrome thật. Security giữ riêng các ca khóa/tag/AAD/nonce/replay/retry, chứng thư và reconnect. Hai suite dùng fixture/context bảo mật hiện có; không dùng ticket mẫu. UI regression dùng test adapter; demo Mxx vẫn nằm riêng và không thay kết quả tích hợp.
 
-| Thao tác | Kết quả mong đợi |
+| Nhóm tùy chọn | Lệnh / nguồn |
 | --- | --- |
-| M13, chuyển Kênh chung/Bình/chat trống | 12 user, 8 chat riêng; lịch sử/preview đúng từng chat, composer trong viewport |
-| Gõ nháp, đổi chat/quay lại | Nháp giữ đúng chat; offline vẫn soạn nhưng Gửi khóa có giải thích |
-| Tìm “duc”, chọn Đức offline | Tìm được tên có dấu, mở chat trống, không tự gửi offline |
-| File M13: thu gọn rồi Bước tiếp theo/mở lại | Tiến trình cập nhật khi ẩn; 100% còn chờ xác nhận rồi mới Hoàn tất |
-| M05/M08/M09 | Gửi lỗi/mất kết nối/peer offline hiển thị đúng; không báo đã gửi hoặc xóa nháp sai |
-| Chạy lại M13 | Dữ liệu cố định và bản nháp reset; không trộn với UI chính thức |
+| Chỉ độc lập | `p3.py check --suite independent` |
+| UI/demo | `p3.py check --suite ui` |
+| Main tích hợp | `p3.py check --suite integrated` |
+| Security thật | `p3.py check --suite security --timeout 180` |
+| Tham chiếu cũ | `p3.py check --suite p1 p2 --p1-root <P1-app> --p2-root <P2-app> --timeout 300`; ghim b085721/fbf53eb, process riêng, không nghiệm thu file main |
+| File lớn 32 MiB | `p3.py check --suite large --file-mib 32 --timeout 180` |
+| File lớn 256 MiB | `p3.py check --suite large --file-mib 256 --timeout 370`; giữ FAIL nếu không hoàn tất, không nâng timeout P1 trong test |
+| 10/20 client + file/chat 4 client | `p3.py check --suite load --timeout 240` |
 
-File thật với **ticket fixture** (P1 thật, không phải P2):
+Các lệnh ngắn trong bảng dùng cùng `.venv\Scripts\python.exe -B`. `all` không chọn legacy/large/load; có thể chọn rõ `--suite all p1 p2` để hồi quy main và legacy riêng trong một lượt. CI P3 chỉ Windows/Python 3.14: step tích hợp/security trước, legacy sau; push đúng nhánh bàn giao kích hoạt workflow. Không chạy file 256 MiB mặc định. Kết quả CI phải đối chiếu run gắn SHA thực tế, không dùng CI nhánh cha thay cho nhánh đã gom.
+
+## Output bước 10
+
+Mặc định `check` in tên/chức năng suite rồi gom pytest theo file/module. Hook nhỏ `p3_progress.py` đọc collection sau deselection và gửi sự kiện hoàn thành sau teardown; không đổi assertion, thứ tự hoặc kết quả test. `DONE x/N` là số test cha hoàn thành trên tổng collection thật; PASS/FAIL/SKIP là ba số riêng. Không in riêng ca PASS; chỉ FAIL/SKIP có ID và lý do.
+
+- Trên terminal, dòng module được cập nhật bằng carriage return; khi redirect hoặc có biến CI, mỗi sự kiện thành một dòng thường, không có ký tự cập nhật terminal. `--quiet` giữ output ngắn cũ và không bật hook tiến độ. Nhãn runner dùng English/ASCII; chú thích cuối in một lần: `- = not applicable or not recorded separately`.
+- Thời gian module đo monotonic từ lúc bắt đầu test đầu tiên đến sau teardown test cuối cùng, không cộng thời gian JUnit hoặc chia thời gian suite. Nhóm bị dừng sớm hiện INCOMPLETE, chưa chạy hiện NOT RUN; không gán các test chưa thực hiện thành SKIP. Nếu không nhận được sự kiện, chỉ trình bày dữ liệu cuối từ JUnit với tổng collection/thời gian module `-`.
+- Sự kiện đi qua file tạm nội bộ, được dọn sau step; `communicate`, deadline và Windows Job Object hiện có vẫn quản lý process. Không thêm định dạng/field vào JSON/JUnit, dependency hay framework báo cáo.
+- Browser chưa có sự kiện hoàn thành trực tiếp: chỉ hiện dòng RUN với DONE `-`, rồi nhóm/viewport hoặc checks/verdict đã ghi trong report cuối; bỏ dòng mô tả đang chạy dư. Browser run dùng thời gian toàn process; DONE 1/1 khi có report kết thúc hợp lệ, không gán 1/1 khi timeout, crash không có report cuối hoặc chỉ có failure dump. Assertion regression/demo giữ PASS đã ghi, FAIL/SKIP/thời gian riêng không có dùng `-`; không biến mỗi assertion thành kịch bản hoặc cộng vào pytest. Tên case lấy mô tả trong report, bỏ tiền tố `checks[n]`.
+- Subtest đếm riêng từ dòng tổng kết pytest, không cộng vào test cha. Tổng được in ngoài bảng (ví dụ `58 subtest passed`; nếu có thì ghi riêng `failed`/`skipped`), không tạo hàng thiếu ID/thời gian. Cuối lượt chỉ có bảng nhóm, trạng thái, PASS/FAIL/SKIP, thời gian thực và đường dẫn report; không in lại danh sách ca PASS.
+
+CI của `6e55f69` lỗi vì stdout Windows CP1252 không in được nhãn tiếng Việt. Lượt sửa nhãn dùng `PYTHONIOENCODING=cp1252:strict`, `PYTHONUTF8=0`, không dùng `-X utf8`. Banner CLI demo đổi thành `Simulation mode`; nhãn mô phỏng trong trang Web giữ nguyên. Bản sửa local tiếp theo dùng `backslashreplace` chỉ ở đường in terminal (kể cả progress/quiet/report path); ký tự ngoài encoding hiện tại hiện thành escape, ký tự biểu diễn được giữ nguyên. Escape trước khi căn/cắt cột; không sửa Unicode trong chat, dữ liệu test, lỗi gốc, log UTF-8 hoặc JSON/JUnit, không đổi trạng thái/mã thoát FAIL.
+
+Kiểm tra bản escape trên stdout CP1252 strict, UTF-8 mode tắt: lượt output đầu 37 PASS/2 FAIL/19 deselected (6,00s); hai FAIL do fixture chọn suite đầu là independent/Not selected thay vì ui. Đổi fixture sang tìm đúng tên suite, giữ assertion và chạy lại đúng hai ca: 2 PASS/56 deselected (0,66s). Tổng 39 ca output liên quan đã đạt qua hai lượt; không chạy lại full local hoặc CI. Có kiểm tra reason Unicode giữ nguyên trong report, browser failure detail, nhãn Unicode và mã thoát 1 ở cả normal/quiet.
+
+Kiểm tra trực tiếp bản sửa ASCII: **38 PASS/18 deselected, 5,60s** (`tests/test_p3_cli.py -k 'output or one_command_demo'`) với stdout CP1252 strict, UTF-8 mode tắt. Regression chạy child process kiểm chứng encoding thật, dòng browser RUN/kết thúc và summary subtest. Ruff/format/diff đạt; không chạy lại full local.
+
+Đã đọc lại lượt đầy đủ `check-2085dca2852d4284b1ea5c7f2c8c74b4`: FAIL 257,353s, independent 132 PASS/1 FAIL do assertion dò `88` khớp thư mục `pytest-88`; số subtest đúng là 3. UI, integrated (188 test/58 subtest + browser) và security (25 test + browser) đạt trong lượt đó. Đã sửa test để kiểm bản ghi/số đếm, không dò toàn output; không chạy lại full suite để lấy số liệu.
+
+Kiểm tra local trực tiếp sau sửa: 22 PASS/14 deselected, 6,20s; mẫu ngắn đã PASS trong lượt trước và không chạy lại để lấy số. `runtime/runner-progress-sample.txt` và `live-proof.txt` trong run mẫu chứng minh tiến độ được in trước khi child kết thúc bằng barrier có giới hạn. Đây là fixture runner/output, không phải nghiệm thu mới của P1/P2/browser. Chưa chạy CI, commit hoặc push.
+
+Lượt thu gọn kiểm tra phụ: lint/format/js-support mỗi nhóm một dòng kết quả; js-syntax dùng toàn bộ danh sách file đã có, tiến độ DONE x/N và một dòng kết quả cuối. `syntax files` là số file kiểm cú pháp, tách khỏi pytest; thời gian cả nhóm đo monotonic quanh vòng kiểm tra, không cộng thời gian từng file. Lỗi vẫn dừng theo hành vi cũ, file chưa chạy không bị tính thành SKIP. Chỉ FAIL/SKIP in chi tiết; log vẫn nằm cạnh report theo tên step và thông tin lỗi hiện có, không thêm field JSON/JUnit. Terminal chỉ in đường dẫn report chính ở cuối.
+
+RUN, kết quả và bảng cuối dùng cùng độ rộng cột dựa trên tên module đã biết: trạng thái/loại/tên căn trái, DONE/số/thời gian căn phải; tên dài được rút gọn ở terminal, giữ nguyên trong report. Mẫu phụ ở `runtime/aux-output-sample.txt` chạy Ruff/Node thật trên fixture nhỏ: PASS, tổng 0,688s. Kiểm tra trực tiếp bị ảnh hưởng: **13 PASS/26 deselected, 1,85s**; Ruff/format/diff đạt. Không chạy full suite hoặc cập nhật CI/PR.
+
+Hoàn thiện DONE: lint/format hiện RUN 0/1 và kết thúc 1/1 theo exit code thật (FAIL cũng hoàn thành một lệnh). js-support chưa có luồng sự kiện từng test nên RUN hiện “—”; cuối lượt đọc summary Node `tests/pass/fail/cancelled/skipped/todo`, DONE là số outcome đã xử lý, không phải số PASS. PASS/FAIL/SKIP giữ counter Node; cancelled/todo cũng tính vào DONE nếu xuất hiện. Summary thiếu dữ liệu thì giữ “—”, không suy tổng từ số dòng PASS. Log cũ `check-e23323d0f54d430fb784462da736ab0f/js-support.log` được đọc lại thành 6/6, không chạy lại.
+
+Mẫu mới `runtime/aux-done-sample.txt` chỉ có một Node test fixture nên DONE đúng là 1/1, tổng lượt mẫu 0,778s. Kiểm tra output liên quan: **12 PASS/35 deselected, 2,08s**; chưa chạy full/CI hoặc commit/push.
+
+Lượt thu gọn browser/subtest: **26 PASS/29 deselected, 2,91s** cho test output trực tiếp bị ảnh hưởng. `runtime/browser-output-sample.txt` chỉ render lại report/JUnit/log đã có của `check-2085dca2852d4284b1ea5c7f2c8c74b4`, giữ thời gian cũ, không phải lượt nghiệm thu browser mới. Không chạy full/browser, không đổi report JSON/JUnit hoặc cập nhật CI/PR.
+
+Sau khi duyệt output, chạy đúng một lượt mặc định `python -X utf8 -B p3.py check`: **PASS 261,813s**, run `check-ca0803bcbc8a4f02b431dd4b1185eafb`. Independent: 156 pytest test, Ruff check/format, 6 Node test và 23 file JS syntax đạt; UI/demo đạt; integrated: 188 pytest test/58 subtest + browser thật đạt; security: 25 pytest test + browser thật đạt. Legacy/large/load không được chọn trong lượt local này. Các ghi chép local phía trên là lịch sử trước khi cho phép commit/push; CI phải xem kết quả gắn commit trên PR #3. Runtime/report chỉ giữ local, không đưa vào commit.
+
+## Timeout, cleanup và bằng chứng
+
+- Mỗi lượt UUID ở `runtime/p3/checks/check-<UUID>/`: report.json, log, JUnit, fixture.json (nguồn module thực/SHA), browser report/ảnh. SHA là HEAD cộng cờ trackedChanges; lượt chưa commit không phải snapshot nguyên trạng của main.
+- PASS chỉ khi nhóm được chọn thực chạy và hoàn tất. FAIL/exit 1 khi lỗi, thiếu dependency, sai revision, timeout hoặc integration toàn skip/không có test. SKIP/Not selected là suite không chọn; pytest deselected là nhóm cố ý loại khỏi lượt đó. Chưa chạy CI/LAN không được ghi PASS.
+- Timeout tổng mặc định 600 giây; socket/control wait có deadline, P1 send mặc định 300 giây. Ca DATA/FIN/COMPLETE dùng hook drop tại relay test, deadline chờ 10/15 giây, cleanup 5 giây. Hook không sửa thuật toán production. Khi chờ COMPLETE, receiver đã verify được giữ completed; sender chưa có ACK vẫn unknown khi ngắt.
+- Windows Job Object dọn cây process của lượt chạy; taskkill chỉ PID do runner tạo. Fixture/test server mở TCP/UDP/HTTP port 0, client dùng cổng thực tế. Không dừng listener có sẵn. Pytest staging riêng từng run được dọn cả khi FAIL; không lưu payload lớn, Chrome profile, key/ticket/token vào artifact.
+- Tham chiếu cũ dùng pytest/fixture child riêng; mặc định conftest deselect hai file legacy. Dùng CLI để chọn chúng, không đổi sys.modules hoặc bỏ guard load_p1. Raw pytest main không còn cố import checkout P1 cũ đã cache.
+- CHROME_BIN tùy chọn chỉ browser Windows. Không in credentials/env; report redaction/audit JSON trước kết luận. Chỉ dùng payload/account thử công khai.
+
+## Demo và kiểm tra nhanh bằng tay
 
 ```powershell
-python -B tests/file_fixture.py --p1-root ../../MMT-P1/A1_Client-Server
-# Terminal khác: dùng chính đường dẫn config vừa in, không dùng đường dẫn ngày cũ.
-node tests/browser-file-live.cjs --config <fixture.json-vua-in> --output runtime/p3/browser --timeout 240
-# Gõ stop/Enter ở fixture để dừng. EOF cũng dọn sạch.
+.\.venv\Scripts\python.exe -B p3.py demo
 ```
 
-P3 tự chạy fixture và browser khi chọn suite p1; không cần hai terminal. Runner browser không dừng fixture bên ngoài, chỉ dọn Chrome/socket/file do chính nó tạo. Manual hai tài khoản qua P2 thật làm theo [README](../README.md): A Web/B TCP, gửi chung/riêng, quan sát online, ngắt B, kiểm chat/nháp còn. Không kỳ vọng truyền file qua P2 fbf53eb hoặc mã hóa mạng.
+Mở URL `/local-demo/` được in; có nhãn **Chế độ mô phỏng**, không có backend/ticket/file bytes thật. Ctrl+C dừng. M13 có 12 user/8 chat riêng; bấm nhãn mô phỏng để chọn M01–M13, chạy lại/bước tiếp theo. Chuyển chat phải giữ nháp; tìm “duc” thấy Đức; thu gọn file rồi mở lại thấy tiến trình mới; M05/M08/M09 hiển thị lỗi/mất kết nối/offline; reset khôi phục dữ liệu xác định.
 
-## Checklist LAN và file lớn — chưa nghiệm thu
+Với trang chính thức, chạy server và bridge theo README; mở hộp Đăng nhập, chuyển sang Đăng ký để tạo account thử. Kiểm username trùng, xác nhận mật khẩu lệch và dữ liệu không hợp lệ; sau mỗi submit/đổi chế độ/đóng hộp, mật khẩu phải rỗng và ẩn. Thành công trở về Đăng nhập, điền username nhưng chưa kết nối. Account nằm trong RAM và mất khi P2 khởi động lại. Mở hai phiên browser: Login → tìm người → chat chung/riêng hai chiều → gửi file/accept, reject → download/hash → disconnect/reconnect. Đã gửi chỉ sau ACK; Hoàn tất chỉ sau xác nhận P1; người offline mất khỏi danh sách hoạt động nhưng peer giữ chat/nháp. Test đồng thời phải xác nhận chat đã đến khi file vẫn transferring và byte đã truyền còn nhỏ hơn tổng byte.
 
-- [ ] Nhóm cung cấp FILE_SESSION/relay thật và cấu hình địa chỉ LAN có kiểm soát; bridge hiện chỉ loopback, không tự đổi bind public trong test.
-- [ ] Chỉ account/file thử; ghi OS/Python/revision, IP/cổng/giới hạn, firewall/VPN và số client. Security v2 còn draft nên payload hiện chưa bảo mật.
-- [ ] Hai máy vật lý: A gửi B, C chat cùng lúc; đúng người nhận, UI không treo, size/SHA-256 khớp nếu báo hoàn tất.
-- [ ] File 0, 1, 1.024, 1.025 byte, 2 MiB, 32 MiB và tối đa 256 MiB nếu môi trường cho phép; tên dài/Unicode; vượt 256 MiB bị chặn trước staging.
-- [ ] Ghi thời gian, byte plaintext/ACK, RAM/đĩa và dung lượng còn trống; tổng giữ/phiên 256 MiB có thể chặn file thứ hai dù mỗi file riêng hợp lệ.
-- [ ] Từ chối, disk-full, ngắt giữa upload/UDP/chờ COMPLETE; không tải partial, không completed giả, không xóa file ngoài session; login lại không tự resume.
-- [ ] Mất/trùng/đảo packet theo hook test P1; thử thực tế LAN tách khỏi mô phỏng có điều khiển. Ghi phần chưa chạy, không suy ra từ localhost.
+## Kết quả và giới hạn
 
-## CI và lịch sử
+Đăng ký Web: run `check-8a4953403f4c4916ac9f420f30bc183c` **PASS 253,102s** trên Windows: independent 120 test, integrated 188 test/58 subtest + hai Chrome, security 25 test + HTTPS/browser và UI/demo. Kiểm mismatch/invalid/duplicate, chống submit lặp, xóa mật khẩu, không tự LOGIN và đăng ký thật → LOGIN → chat/file đều đạt. Hai account dùng P2/relay thật của fixture, không dùng stub/ticket mẫu; hướng dẫn và giới hạn RAM ở README. Xem mốc mới đầu test-plan để phân biệt số liệu hiện hành với lịch sử bên dưới.
 
-`.github/workflows/p3.yml` chỉ chạy **windows-latest, Python 3.14, Node 24**, checkout riêng đúng hai SHA P1/P2, không dùng secret CI hoặc server có sẵn. Artifact chỉ nhận JSON công khai, log/JUnit đã lọc và ảnh; timeout job 15 phút. Kết quả CI chỉ có giá trị khi run thực sự hoàn tất, không chỉ vì có workflow.
+CI đầu `766cfc0` phát hiện notification close có thể đến sau assertion xóa password. Đã sửa xóa đồng bộ ở nút Đóng/Escape; regression giữ notification close chứng minh bản cũ FAIL, bản vá + toàn bộ browser tích hợp PASS 40,962s. Không đổi timeout/assertion. Chi tiết CI lỗi, artifact và run ID ở test-plan; cần xem CI đúng commit vá, không coi lượt local trước đó là CI đạt.
 
-Lịch sử/IT/Mxx và kết quả từng lượt: [test-plan.md](test-plan.md). Nội dung đóng góp báo cáo: [p3-report.md](p3-report.md). Security: [draft v2](security-v2-draft.md), chưa triển khai trong lượt này.
+Sửa FIN lặp: `begin_verification()` lấy lock không chặn để worker verify/fsync không giữ vòng nhận UDP. Kiểm tra phase/chunk và điều kiện COMPLETE sau verify/lưu thành công giữ nguyên; không đổi retry/timeout. Regression giữ worker bằng barrier và chuyển COMPLETE thật của transfer khác: logic cũ FAIL, bản sửa PASS; P1 cùng checkout 36/36 đạt. Integrated 188 test/58 subtest + hai Chrome và security 23 test + HTTPS/browser đều PASS, run `check-4ead31cf49d045be85fddfe8de54d3c6`. Đây là sửa điểm chặn đã đo được trong CI chẩn đoán, **chưa khẳng định tái hiện nguyên nhân FAIL cũ**. Chi tiết/lệnh chạy ở mốc FIN đầu test-plan.
+
+Kết quả 6 việc, run ID, thời gian và lỗi production xem mốc mới đầu [test-plan.md](test-plan.md). [Review đầu](review-main-20261113.md) giữ bằng chứng trước khi chỉnh runner; lịch sử IT/Mxx vẫn ở test-plan. Không hiểu số test lịch sử là kết quả phiên bản mới.
+
+File 32 MiB đạt hash/cleanup; 256 MiB admission đạt nhưng **truyền trọn 256 MiB FAIL do timeout gửi 300 giây**. Không thay đổi production để làm test đạt; chưa có file hoàn tất để đối chiếu hash của ca 256 MiB.
+
+Mốc gom 2026-11-14 từng có load 10-client FAIL do server `WinError 10035`. Lượt sửa tiếp theo trên cùng nhánh đã dùng chung lock đọc/ghi TLS, nhận không chặn trong lock và chờ readiness ngoài lock theo deadline cũ. Run `check-63bccc9ad4e04ffaafa563d89818fd34` **đạt 10/20 client** (450/450 và 1.900/1.900 lượt nhận, 0 trùng/lỗi, reconnect/cleanup đạt), integrated 187 test + hai Chrome, security 23 test + HTTPS/browser và file/chat 4 client đạt. Có test hồi quy tái hiện lỗi trước sửa và kiểm tra lock/deadline/reset/TLS fatal; xem đầu test-plan để phân biệt với lỗi lịch sử. CI mặc định không chạy load; kết quả local trên không thay cho benchmark hoặc bảo đảm mọi lịch thread.
+
+**Bước 8 đã nối trên nhánh bàn giao:** TLS xác minh chứng thư và AES-GCM từng chặng cho chat/file; UI phản ánh context thật. Hướng dẫn chứng thư/chạy thật ở README, byte/AAD/nonce ở protocol. Các kết quả review trước Security là lịch sử; không coi toàn bộ draft Security v2 là yêu cầu đã triển khai. Chưa LAN nhiều máy, E2EE, disk-full hoặc benchmark mới. Lượt gom nhánh không sửa production hoặc xử lý timeout 256 MiB.

@@ -341,6 +341,14 @@ def http_bridge():
         ("/api/connect", {}, b"not-json", 400),
         ("/api/connect", {}, b'{"sessionId":"bad"}', 400),
         ("/api/message", {}, b"{}", 400),
+        ("/api/register", {"Origin": "http://evil.invalid"}, b"{}", 403),
+        ("/api/register", {}, b"[]", 400),
+        ("/api/register", {}, b'{"username":"  ","password":"test"}', 400),
+        ("/api/register", {}, b'{"username":123,"password":"test"}', 400),
+        ("/api/register", {}, b'{"username":"test","password":""}', 400),
+        ("/api/register", {}, b'{"username":"test","password":null}', 400),
+        # No plaintext fallback, even when valid credentials reach a v1 fixture.
+        ("/api/register", {}, b'{"username":"test","password":"test"}', 400),
     ],
 )
 def test_http_boundary(http_bridge, path, headers, body, expected):

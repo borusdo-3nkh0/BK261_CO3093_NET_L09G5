@@ -250,10 +250,12 @@ export async function mountUI({ adapter = null, mode = "live", conversations = [
       else if (transfer.status === "completed") { progress.max = 1; progress.value = 1; }
       const amount = known ? `${Math.floor(100 * transfer.transferredBytes / transfer.totalBytes)}% · ${transfer.transferredBytes.toLocaleString("vi-VN")} / ${transfer.totalBytes.toLocaleString("vi-VN")} byte`
         : transfer.totalBytes === 0 ? "0 byte — chờ kết quả" : `${transfer.transferredBytes} byte · Chưa rõ tiến trình`;
+      const statusText = transfer.status === "failed" && transfer.error?.code === "ACCEPT_TIMEOUT"
+        ? transfer.error.userMessage : `${statusLabels[transfer.status]}${transfer.status === "transferring" && known && transfer.transferredBytes === transfer.totalBytes ? copy.fileConfirmation : ""}`;
       li.append(node("h3", transfer.fileName), node("p", `${direction} · ${transfer.totalBytes === null ? "Chưa rõ dung lượng" : transfer.totalBytes.toLocaleString("vi-VN") + " byte"}${simulation ? " · Dữ liệu giả" : ""}`),
         progress, node("p", transfer.status === "completed" && transfer.totalBytes === 0 ? "0 byte" : amount),
-        node("p", `${statusLabels[transfer.status]}${transfer.status === "transferring" && known && transfer.transferredBytes === transfer.totalBytes ? copy.fileConfirmation : ""}`, "transfer-status"));
-      if (transfer.error) li.append(node("p", transfer.error.userMessage));
+        node("p", statusText, "transfer-status"));
+      if (transfer.error && transfer.error.userMessage !== statusText) li.append(node("p", transfer.error.userMessage));
       if (!simulation && transfer.recipientId === selfId()) {
         const actions = node("div", undefined, "file-actions");
         const add = (label, method) => {
@@ -376,6 +378,11 @@ export async function mountUI({ adapter = null, mode = "live", conversations = [
     drafts.set(selected, $("message-input").value);
     draftRevisions.set(selected, (draftRevisions.get(selected) ?? 0) + 1);
     updateComposer();
+  });
+  $("message-input").addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (!event.repeat) $("message-form").requestSubmit();
   });
   $("message-form").addEventListener("submit", event => {
     event.preventDefault();

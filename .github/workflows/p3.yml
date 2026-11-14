@@ -6,6 +6,9 @@ on:
       - duc-p3-web-security-integration
       - p3-web-security-integration
       - feature/p1-p2-p3-integration
+      - handoff/p3-integrated-security-20261114
+      - feature/p3-security
+      - review/main-integration-20261113
     paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
   pull_request:
     paths: ['A1_Client-Server/**', '.github/workflows/p3.yml']
@@ -22,7 +25,7 @@ jobs:
   check:
     name: Windows Python 3.14
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: A1_Client-Server
@@ -50,8 +53,10 @@ jobs:
           node-version: '24'
       - run: python -m pip install --group dev
       - run: python -m pip check
-      - name: Independent, UI/demo, pinned P1 and real P2
-        run: python -B p3.py check --suite all --p1-root ../references/p1/A1_Client-Server --p2-root ../references/p2/A1_Client-Server --timeout 600
+      - name: Current integrated TLS checkout, security and UI/demo
+        run: python -B p3.py check --timeout 600
+      - name: Legacy reference backends (not main acceptance)
+        run: python -B p3.py check --suite p1 p2 --p1-root ../references/p1/A1_Client-Server --p2-root ../references/p2/A1_Client-Server --timeout 300
       - name: Public reports and failure evidence only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

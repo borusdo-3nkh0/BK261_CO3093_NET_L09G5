@@ -10,7 +10,7 @@ class TestMultiClientServer(unittest.TestCase):
     def test_multiple_clients_handshake(self):
         """Server should handle multiple clients concurrently."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         server_thread = threading.Thread(target=server.start)
 
@@ -76,7 +76,7 @@ class TestMultiClientServer(unittest.TestCase):
     def test_twenty_concurrent_clients(self):
         """Server should handle 20 concurrent handshakes."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         server_thread = threading.Thread(target=server.start)
         server_thread.start()
@@ -159,7 +159,7 @@ class TestMultiClientServer(unittest.TestCase):
     def test_concurrent_login_same_account(self):
         """Only one client can log in with the same account."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         # Create the account before starting the server.
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
@@ -277,7 +277,7 @@ class TestMultiClientServer(unittest.TestCase):
     def test_session_cleanup_after_disconnect(self):
         """Session must be removed after a client disconnects."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
 
@@ -366,7 +366,7 @@ class TestMultiClientServer(unittest.TestCase):
     def test_relogin_after_disconnect(self):
         """User can log in again after previous session ends."""
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
 
@@ -448,7 +448,7 @@ class TestMultiClientServer(unittest.TestCase):
         password = "router_test_password"
 
         # STEP 1: Initialize server and register account.
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register(username, password))
 
@@ -565,7 +565,7 @@ class TestMultiClientServer(unittest.TestCase):
 
         import json
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         self.assertTrue(server.auth_manager.register("alice", "demo123"))
         self.assertTrue(server.auth_manager.register("bob", "demo456"))
@@ -677,7 +677,7 @@ class TestMultiClientServer(unittest.TestCase):
 
         import json
 
-        server = SocketServer(host="127.0.0.1", port=0)
+        server = SocketServer(host="127.0.0.1", port=0, udp_port=0)
 
         accounts = {
             "alice": "demo123",

@@ -1,5 +1,9 @@
 # Công việc P3 và điều kiện hoàn thành
 
+## Security tích hợp — 2026-11-13
+
+Đã nối HTTPS/TLS có kiểm chứng, P2 cấp/thu hồi context theo phiên, AES-GCM chat riêng/chung và UDP file, AAD/nonce/replay/retry; UI phản ánh context thật và giữ unknown khi thiếu xác nhận. Khóa AES độc lập HMAC. Thực hiện theo phạm vi P3 được cho phép sửa điểm nối P1/P2/P3, không suy ra mọi mục draft đã được nhóm duyệt. Kết quả ở test-plan; bước 8 không còn chỉ là primitive độc lập. Timeout 256 MiB vẫn riêng, chưa sửa. Các mốc dưới đây là lịch sử.
+
 ## Nâng cấp kiểm thử/CLI/CI — 2026-11-12
 
 Đã thêm p3.py check/demo, runner config/output theo UUID, timeout/cleanup/report và redaction; tích hợp chọn bắt buộc không được toàn skip hoặc dùng revision sai/source dirty. UI/demo giữ renderer và dữ liệu cũ. Thêm test bridge với FaultRelay P1; chạy suite P1 gốc. Hướng dẫn hiện hành ở testing.md, đóng góp báo cáo ở p3-report.md; lịch sử ở test-plan.md.
