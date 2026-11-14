@@ -8,7 +8,7 @@ Sau handshake, mỗi thông điệp là một đối tượng JSON mã hóa UTF-
 HÌNH 4.1
 
 \subsection{Xác thực và quản lý phiên}
-Tài khoản được \texttt{AuthManager} lưu trong bộ nhớ (RAM) dưới dạng từ điển có khóa bảo vệ (lock). Mật khẩu không bao giờ được lưu thô: server dùng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên 16 byte và 600.000 vòng lặp (iteration), so sánh kết quả bằng \texttt{hmac.compare\_digest}. Log của server chỉ ghi tên người dùng, không ghi mật khẩu.
+Tài khoản được \texttt{AuthManager} lưu trong trên bộ nhớ (RAM) dưới dạng từ điển (dictionary \texttt{self.users}) có khóa bảo vệ (lock). Mật khẩu không được lưu dạng thô mà được băm bằng PBKDF2-HMAC-SHA256 với salt ngẫu nhiên. Log của server chỉ ghi tên người dùng, không ghi mật khẩu.
 
 \texttt{REGISTER} chỉ tạo tài khoản, không tự đăng nhập. Khi \texttt{LOGIN} thành công, \texttt{SessionManager} ghi lại tên người dùng, địa chỉ IP, cổng TCP của client và trạng thái \texttt{online}. Server xử lý đăng nhập trùng theo hai trường hợp: nếu kết nối này đã đăng nhập thì trả \texttt{ALREADY\_AUTHENTICATED}, nếu tài khoản đang online ở kết nối khác thì trả \texttt{ALREADY\_LOGGED\_IN}. Trường hợp hai kết nối đăng nhập cùng lúc được xử lý bằng việc \texttt{add\_session} trả \texttt{False} cho kết nối đến sau. Khi một kết nối kết thúc, phiên bị gỡ nên người dùng đăng nhập lại được ngay.
 
@@ -18,12 +18,9 @@ Server dùng mô hình mỗi kết nối một luồng (thread-per-connection) v
 Vì nhiều luồng cùng truy cập dữ liệu dùng chung, mỗi cấu trúc có lock riêng:
 
 
-\begin{table}[htbp]
+\begin{table}[H]
     \centering
     \small
-    \caption{Dữ liệu dùng chung và cơ chế bảo vệ}
-    \label{tab:shared_data_protection}
-
     \renewcommand{\arraystretch}{1.3}
 
     \begin{tabularx}{\textwidth}{
@@ -62,7 +59,7 @@ Send lock theo từng người dùng bảo đảm hai luồng không ghi xen k�
 Mỗi yêu cầu được giải mã và phân loại bởi RequestDispatcher. Các action và phản hồi như sau:
 
 
-\begin{table}[htbp]
+\begin{table}[H]
     \centering
     \small
 
@@ -118,11 +115,8 @@ Với \texttt{FILE\_SESSION}, server yêu cầu UDP relay (do P1 cung cấp) c�
 Server dùng hai mức timeout: 5 giây cho handshake và 60 giây cho mỗi dòng yêu cầu khi kết nối rảnh (\texttt{idle\_timeout}). Mỗi loại sự cố có cách xử lý riêng:
 
 
-\begin{table}[htbp]
+\begin{table}[H]
     \centering
-    \caption{Các sự cố và cách xử lý}
-    \label{tab:error_handling}
-
     \renewcommand{\arraystretch}{1.3}
 
     \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X @{}}
