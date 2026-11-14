@@ -14,7 +14,7 @@ Server TCP chỉ ghi nhận cổng TCP của client, mà cổng này không cho 
 Toàn bộ \texttt{OFFER}, \texttt{ACCEPT}, \texttt{DATA}, \texttt{ACK}, \texttt{FIN} và \texttt{COMPLETE} của file đi qua UDP. Chúng không phải là action TCP và không đi qua \texttt{MessageRouter} của server.
 
 \subsection{Giao thúc điều kiển TCP}
-Mặc định server dùng cổng TCP 5000 và relay dùng cổng UDP 5001, cả hai đều cấu hình được. Sau handshake \texttt{HELLO2}/\texttt{WELCOME2} trong TLS, mỗi thông điệp là một đối tượng JSON UTF-8 kết thúc bằng LF; ký tự xuống dòng bên trong nội dung phải được escape. Bên nhận phải đệm dữ liệu và tách từng dòng hoàn chỉnh, vì một lần recv có thể chứa nửa thông điệp hoặc nhiều thông điệp.
+Mặc định server dùng cổng TCP 5000 và relay dùng cổng UDP 5001, cả hai đều cấu hình được. Sau handshake \texttt{HELLO2}/\texttt{WELCOME2} trong TLS, mỗi thông điệp là một đối tượng JSON UTF-8 kết thúc bằng LF; ký tự xuống dòng bên trong nội dung phải được escape. Bên nhận phải đệm dữ liệu và tách từng dòng hoàn chỉnh, vì một lần \texttt{recv} có thể chứa nửa hoặc nhiều thông điệp.
 
 Ba loại thông điệp được phân biệt bằng trường định danh:
 
@@ -31,11 +31,12 @@ Ba loại thông điệp được phân biệt bằng trường định danh:
         Sự kiện chat bất đồng bộ & \texttt{type}   & Server $\rightarrow$ Client \\
         \bottomrule
     \end{tabular}
+    \caption{Các loại thông điệp và hướng truyền trong giao thức}
 \end{table}
 
 Mã trạng thái là chuỗi chữ hoa, phân biệt hoa thường, không phải mã HTTP. Danh sách action và status đầy đủ nằm ở mục 4.4. Ví dụ một phiên trao đổi (dạng logic, trước lớp mã hóa chat ở mục 6):
 
-\begin{lstlisting}[style=json]
+\begin{lstlisting}[style=json, caption={Ví dụ trao đổi thông điệp JSON giữa Client và Server}]
     {"action":"REGISTER","username":"alice","password":"example-only"}
     {"status":"REGISTER_SUCCESS"}
 
@@ -165,9 +166,10 @@ Dòng thứ sáu là sự kiện server gửi cho bob, các dòng còn lại là
 \end{figure}
 
 \subsection{Giao thức file trên UDP}
+\vspace{-1.2em}
 Mỗi datagram là một gói hoàn chỉnh, các số nguyên theo thứ tự byte mạng (network byte order). Phần đầu (header) dài 44 byte:
 
-
+\vspace{-0.5em}
 \begin{table}[H]
     \centering
     \small
@@ -200,13 +202,16 @@ Mỗi datagram là một gói hoàn chỉnh, các số nguyên theo thứ tự b
 
         \bottomrule
     \end{tabularx}
+    \caption{Cấu trúc gói tin UDP của giao thức truyền file}
 \end{table}
 
-\vspace{-1.8em}
+\vspace{-1.9em}
 Sau header là phần thân: \texttt{nonce} 12 byte, dữ liệu mã hóa (0 đến 996 byte), thẻ GCM 16 byte và thẻ HMAC 16 byte. Mỗi chunk file mang tối đa 996 byte dữ liệu gốc, nên một datagram DATA dài tối đa 1.084 byte, còn gói điều khiển rỗng chỉ 88 byte. Kích thước này được chọn thận trọng để giảm nguy cơ phân mảnh IP trên mạng LAN thông thường; nó không thay thế việc dò MTU của đường truyền. Ý nghĩa của nonce, thẻ GCM và HMAC được giải thích ở mục 6.
 
+\vspace{-0.6em}
 Các loại thông điệp:
 
+\vspace{-0.7em}
 \begin{table}[H]
     \centering
     \small
@@ -214,7 +219,7 @@ Các loại thông điệp:
 
     \begin{tabularx}{\textwidth}{
         @{}
-        >{\raggedleft\arraybackslash}p{1.2cm}
+        >{\raggedleft\arraybackslash}p{1.5cm}
         >{\centering\arraybackslash}p{2.2cm}
         >{\raggedright\arraybackslash}X
         @{}
@@ -241,6 +246,7 @@ Các loại thông điệp:
 
         \bottomrule
     \end{tabularx}
+    \caption{Các loại thông điệp trong giao thức truyền file UDP}
 \end{table}
 
 Siêu dữ liệu OFFER gồm: \texttt{recipient} (tên người nhận), filename (tên tệp 1 đến 128 byte UTF-8, không chứa đường dẫn hay ký tự điều khiển), \texttt{size} (0 đến 268.435.456 byte, tức tối đa 256 MiB), \texttt{sha256} (64 ký tự hex thường), \texttt{chunk\_size} và texttt{total\_chunks}. Relay tự thêm trường \texttt{sender} từ phiên đã xác thực, không bao giờ tin giá trị client tự khai, và từ chối OFFER có kích thước hoặc số chunk không nhất quán. File rỗng không có chunk nào và đi thẳng từ ACCEPT sang FIN.

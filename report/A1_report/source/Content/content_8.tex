@@ -54,6 +54,7 @@ Quy trình CI trên GitHub Actions chạy trên Windows với Python 3.14.
 
         \bottomrule
     \end{tabularx}
+    \caption{Các nhóm kiểm thử và phạm vi kiểm tra của hệ thống}
 \end{table}
 
 
@@ -62,44 +63,39 @@ Hai nhóm tùy chọn không chạy mặc định vì tốn thời gian và tài
 \subsection{Kết quả}
 Các kết quả dưới đây ghi nhận ngày 14/11/2026 trên Windows, Python 3.14.4, dùng tải khoản và dữ liệu thử.
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \small
     \renewcommand{\arraystretch}{1.4}
-
     \begin{tabularx}{\textwidth}{
         @{}
-        >{\raggedright\arraybackslash}p{2.5cm}
+        >{\raggedright\arraybackslash}p{5cm}
         >{\raggedright\arraybackslash}X
         @{}
     }
         \toprule
-        \textbf{Nhóm} & \textbf{Nội dung} \\
+        \textbf{Kiểm thử} & \textbf{Kết quả} \\
         \midrule
+        Module truyền file UDP (giao thức, CLI, truyền UDP)
+        & \textbf{36/36} đạt \\
 
-        \texttt{independent}
-        & Kiểm tra Python độc lập với backend, Ruff, định dạng, kiểm tra JavaScript \\
+        Nhóm tích hợp: Python và hai Chrome với server, relay thật
+        & \textbf{188 test} và 58 subtest đạt, không bỏ qua ca nào \\
 
-        \texttt{ui}
-        & Kiểm thử giao diện trên Chrome ở bốn kích thước màn hình, dùng adapter giả lập \\
+        Nhóm bảo mật: Python và HTTPS/trình duyệt
+        & \textbf{23 test} đạt \\
 
-        \texttt{integrated}
-        & Server, UDP relay, bridge và giao diện chạy cùng một checkout, kèm hai phiên Chrome thật qua TLS/HTTPS \\
+        Giao diện chính thức (adapter giả lập)
+        & \textbf{242 kiểm tra} mỗi kích thước 1440$\times$900, 1366$\times$768, 1100$\times$750 và \textbf{246} ở 390$\times$844 \\
 
-        \texttt{security}
-        & Sai khóa, sai thẻ, sai AAD, nonce, replay, gửi lại, chứng thư và thu hồi phiên \\
+        Ruff lint và format
+        & Đạt; không thêm dependency \\
 
-        \texttt{p1}, \texttt{p2}
-        & Hồi quy cho từng thành phần ở bản đã ghim, chạy riêng, không thay cho nghiệm thu tích hợp \\
-
-        \texttt{load} (tùy chọn)
-        & 10 và 20 client đồng thời, cộng thêm file và chat với 4 client \\
-
-        \texttt{large} (tùy chọn)
-        & File 32 MiB và 256 MiB \\
-
+        Windows CI
+        & Đạt cả 6 nhóm: \texttt{independent}, \texttt{ui}, \texttt{integrated}, \texttt{security}, \texttt{p1}, \texttt{p2} \\
         \bottomrule
     \end{tabularx}
+    \caption{Kết quả kiểm thử các thành phần và nhóm chức năng của hệ thống}
 \end{table}
 
 Nhóm tích hợp bao phủ chat chung và riêng hai chiều, gửi file hai chiều kèm đối chiếu SHA-256, ACK, online/offline, kết nối lại, chat trong lúc file còn đang truyền, và ngắt kết nối giữa DATA, FIN, COMPLETE. Trong lượt nghiệm thu trình duyệt thật, các file Unicode được truyền với kích thước 8.388.608 byte, 262.147 byte, 28 byte (cùng tên, nội dung mới) và file rỗng 0 byte; hash của file tải về đều khớp. Một ca từ chối file và một ca ngắt kết nối khi người nhận đang chờ chấp nhận cũng đạt, không có trạng thái hoàn tất giả.

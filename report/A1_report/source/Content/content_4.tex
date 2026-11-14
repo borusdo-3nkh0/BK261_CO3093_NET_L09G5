@@ -48,6 +48,7 @@ Vì nhiều luồng cùng truy cập dữ liệu dùng chung, mỗi cấu trúc 
 
         \bottomrule
     \end{tabularx}
+    \caption{Các cơ chế đồng bộ và bảo vệ dữ liệu dùng chung}
 \end{table}
 
 
@@ -100,6 +101,7 @@ Mỗi yêu cầu được giải mã và phân loại bởi RequestDispatcher. C
 
         \bottomrule
     \end{tabularx}
+    \caption{Các hành động và mã phản hồi của giao thức Client--Server}
 \end{table}
 
 
@@ -142,6 +144,7 @@ Server dùng hai mức timeout: 5 giây cho handshake và 60 giây cho mỗi dò
 
         \bottomrule
     \end{tabularx}
+    \caption{Cơ chế xử lý lỗi và sự cố trong kết nối Client--Server}
 \end{table}
 
 Dù kết thúc vì lý do nào, khối \texttt{finally} của luồng xử lý luôn thực hiện cùng một chuỗi dọn dẹp: thu hồi ticket ở UDP relay, gỡ khỏi bảng định tuyến, gỡ phiên, đóng context mã hóa, đóng socket và trả lại một chỗ cho semaphore. Nhờ vậy lỗi của một client không ảnh hưởng đến các client khác. Phía relay, mọi lượt truyền file đang dở của người đó bị đánh dấu thất bại (\texttt{PEER\_DISCONNECTED}) và bên còn lại được thông báo.

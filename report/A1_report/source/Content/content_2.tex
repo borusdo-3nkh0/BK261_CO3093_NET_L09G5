@@ -39,123 +39,18 @@ Hệ thống gồm bốn thành phần chạy trong hai tiến trình chính, c�
         & Sinh chứng thư thử, TLS, AES-GCM, quản lý nonce và chống replay \\
 
         \bottomrule
-    \end{tabularx}
-\end{table}
 
+    \end{tabularx}
+    \caption{Các thành phần chính của hệ thống và chức năng}
+\end{table}
 
 
 \begin{figure}[H]
     \centering
-    \caption{Kiến trúc tổng quan của hệ thống}
-    \label{fig:system_architecture}
-
-    \resizebox{\textwidth}{!}{%
-    \begin{tikzpicture}[
-        font=\sffamily,
-        component/.style={
-            draw,
-            rounded corners=3mm,
-            minimum width=3cm,
-            minimum height=1.8cm,
-            align=center,
-            line width=0.8pt
-        },
-        browser/.style={
-            component,
-            fill=gray!10,
-            draw=gray!55,
-            text=black
-        },
-        bridge/.style={
-            component,
-            fill=teal!10,
-            draw=teal!65!black,
-            text=teal!45!black
-        },
-        server/.style={
-            component,
-            fill=violet!8,
-            draw=violet!70,
-            text=violet!65!black
-        },
-        connection/.style={
-            <->,
-            >=Stealth,
-            line width=1.1pt,
-            draw=gray!65
-        },
-        process/.style={
-            draw=gray!45,
-            dashed,
-            rounded corners=4mm,
-            inner sep=5mm,
-            line width=0.8pt
-        }
-    ]
-
-    % Four components in one row
-    \node[browser] (browser) at (0,0) {
-        \textbf{\Large Trình duyệt}\\[2mm]
-        \large JavaScript
-    };
-
-    \node[bridge] (bridge) at (4,0) {
-        \textbf{\Large Bridge}\\[2mm]
-        \large HTTPS, cổng 8766
-    };
-
-    \node[server] (core) at (8,0) {
-        \textbf{\Large Server core}\\[2mm]
-        \large TCP/TLS, cổng 5000
-    };
-
-    \node[server] (relay) at (12,0) {
-        \textbf{\Large UDP relay}\\[2mm]
-        \large UDP, cổng 5001
-    };
-
-    % Server process boundary
-    \begin{scope}[on background layer]
-        \node[
-            process,
-            fit=(core)(relay),
-            label={[font=\large\bfseries, text=gray!65]
-                above:Tiến trình server}
-        ] {};
-    \end{scope}
-
-    % Browser <-> Bridge
-    \draw[connection]
-        (browser.east) -- (bridge.west)
-        node[midway, above=2mm, font=\large\bfseries] {HTTPS};
-
-    % Bridge <-> Server core
-    \draw[connection]
-        (bridge.east) -- (core.west)
-        node[midway, above=2mm, font=\large\bfseries] {TCP/TLS};
-
-    % Bridge <-> UDP relay
-    \draw[connection]
-        (bridge.south) to[out=-90, in=-90, looseness=1.15]
-        node[midway, below=9mm, font=\large\bfseries] {UDP}
-        (relay.south);
-
-    % Server core -> UDP relay: ticket
-    \draw[
-        ->,
-        >=Stealth,
-        line width=1.1pt,
-        draw=gray!65
-    ]
-        (core.north east)
-        to[out=35, in=145, looseness=1.1]
-        node[midway, above=2mm, font=\large\bfseries]
-        {cấp ticket}
-        (relay.north west);
-
-    \end{tikzpicture}%
-    }
+    \includegraphics[width=0.7\textwidth]{Assets/connect_architecture_overview.png}
+    \caption{Kiến trúc tổng quan của hệ thống Connect}
 \end{figure}
+
 
 
 Trình duyệt gửi yêu cầu tới bridge qua HTTPS. Bridge duy trì kết nối TCP/TLS tới server cho từng phiên đăng nhập, server xác thực, giải mã tin, rời định tuyến và mã hóa lại cho người nhận. Tin đến người nhận đi ngược lại qua bridge của họ tới trình duyệt.
