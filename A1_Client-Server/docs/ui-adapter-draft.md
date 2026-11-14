@@ -1,5 +1,9 @@
 # Giao diện giữa UI và adapter
 
+## Đăng ký trên adapter chính thức — 2026-11-14
+
+`createP2Adapter.register({username, password})` trả Promise chứa `{status: "REGISTER_SUCCESS" | "REGISTER_FAILED"}` từ POST HTTPS `/api/register`; lỗi HTTP/network reject Promise. Không phát connection.changed, không thay phiên hiện tại và không tự connect. Hộp tài khoản kiểm xác nhận password ở UI (không gửi trường này sang P2), chặn submit lặp, thông báo cố định và xóa mật khẩu. Chỉ sau người dùng LOGIN mới tạo phiên/context và các event hiện có. Đây là API nội bộ P3, không thêm packet/status P2; mock/demo không có tính năng tài khoản. Security hiện hành đã tích hợp TLS/AES-GCM theo README; các mốc draft/“UI chỉ LOGIN” phía dưới là lịch sử.
+
 > Cập nhật bàn giao 2026-11-12: source hiện ở MMT-P3/A1_Client-Server; các mục có ngày cũ bên dưới là lịch sử. Từ lượt này, demo source trong web/local-demo/ được commit theo yêu cầu mới; review/runtime/bí mật vẫn bị loại. Hướng dẫn chạy hiện hành ở ../README.md; Security v2 ở security-v2-draft.md là draft chưa triển khai.
 
 ## File live — mở rộng nội bộ P3, draft 2026-11-11

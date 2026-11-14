@@ -2,6 +2,10 @@
 
 > Security hiện hành (feature/p3-security, 2026-11-13): các entry point P2/bridge bắt buộc TLS/HTTPS có chứng thư, LOGIN cấp context chat; FILE_SESSION cấp ticket v2/AES file, relay và client dùng codec v2. Xem README/protocol và bằng chứng test-plan. Legacy constructors/checkout chỉ dùng fixture hồi quy, không fallback trên endpoint thật. Các ghi chép cũ về security chỉ độc lập/draft bên dưới là lịch sử.
 
+## Đăng ký Web hiện hành — 2026-11-14
+
+UI gọi `createP2Adapter.register({username, password})` → POST HTTPS `/api/register` với JSON body. Bridge mở kết nối TLS riêng, xác minh CA/hostname, HELLO2/WELCOME2 rồi gửi REGISTER JSON newline hiện có của P2. Chỉ trả status REGISTER_SUCCESS/REGISTER_FAILED; không tạo session/token/ticket hoặc tự LOGIN. Username có ký tự không phải khoảng trắng và password không rỗng theo P2; với input hợp lệ, REGISTER_FAILED nghĩa là username đã tồn tại. Giới hạn frame xác thực hiện có của bridge là 1.024 byte. Không sửa protocol hoặc lưu account trong P3; account RAM P2 mất khi restart. Các ghi chép cũ “REGISTER ngoài UI” bên dưới là lịch sử. UI báo lỗi cố định, xóa mật khẩu khi submit/đổi chế độ/đóng hộp, không URL/storage/log; xem README và mốc đăng ký trong test-plan.
+
 ## Current integration status — 2026-11-12
 
 This document combines the P1/P2 integration contract and

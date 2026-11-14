@@ -64,6 +64,9 @@ export function createP2Adapter({ getConversations = () => [] } = {}) {
   return {
     subscribe(callback) { const id = crypto.randomUUID(); listeners.set(id, callback); return id; },
     unsubscribe(id) { listeners.delete(id); },
+    register({ username, password }) {
+      return request("/api/register", { username, password });
+    },
     // P2 can attempt UNICAST without a presence feed; its ACK decides the outcome.
     canSendMessage(conversation) {
       return current?.connected === true && conversation.kind === "private" &&

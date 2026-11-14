@@ -596,6 +596,32 @@ class BridgeServer(ThreadingHTTPServer):
         self.sessions_lock = threading.Lock()
         self.file_factory, self.storage = file_factory, storage
 
+    def register(self, username, password):
+        if (
+            not isinstance(username, str)
+            or not username.strip()
+            or not isinstance(password, str)
+            or not password
+        ):
+            raise ValueError("Nhập tên đăng nhập và mật khẩu hợp lệ.")
+        frame = encode(dict(action="REGISTER", username=username, password=password))
+        if self.tls_context is None:
+            raise ValueError("Đăng ký cần kết nối bảo mật tới máy chủ.")
+        with socket.create_connection(self.target, timeout=TIMEOUT) as raw:
+            with self.tls_context.wrap_socket(
+                raw, server_hostname=self.target[0]
+            ) as sock:
+                sock.sendall(b"HELLO2\n")
+                if read_line(sock) != b"WELCOME2\n":
+                    raise ValueError("Không thể đăng ký lúc này. Hãy thử lại sau.")
+                sock.sendall(frame)
+                reply = json.loads(read_line(sock))
+        status = reply.get("status") if isinstance(reply, dict) else None
+        if status not in {"REGISTER_SUCCESS", "REGISTER_FAILED"}:
+            raise ValueError("Dữ liệu đăng ký không hợp lệ hoặc máy chủ chưa sẵn sàng.")
+        # With the validated input above, P2 REGISTER_FAILED means an existing username.
+        return {"status": status}
+
     def server_close(self):
         for session in list(self.sessions.values()):
             session.end("disconnected")
@@ -710,7 +736,11 @@ class Handler(SimpleHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValueError("Yêu cầu phải là đối tượng JSON.")
-            if self.path == "/api/connect":
+            if self.path == "/api/register":
+                self.respond(
+                    self.server.register(body.get("username"), body.get("password"))
+                )
+            elif self.path == "/api/connect":
                 session_id = str(uuid.UUID(body.get("sessionId", "")))
                 username, password = body.get("username"), body.get("password")
                 if (
@@ -759,6 +789,8 @@ class Handler(SimpleHTTPRequestHandler):
                     )
             else:
                 self.respond({"error": "Không có thao tác này."}, 404)
+        except ssl.SSLCertVerificationError:
+            self.respond({"error": "Không thể xác minh chứng thư máy chủ."}, 503)
         except (ValueError, TypeError, AttributeError) as exc:
             # Parser errors can contain input; only our validation messages are public.
             message = (

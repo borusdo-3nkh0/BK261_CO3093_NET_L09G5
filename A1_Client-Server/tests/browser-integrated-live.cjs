@@ -60,8 +60,12 @@ async function browser(label) {
   await client.cdp("Page.enable");
   await client.cdp("Emulation.setDeviceMetricsOverride", { width: label === "A" ? 1440 : 1100, height: label === "A" ? 900 : 750, deviceScaleFactor: 1, mobile: false });
   // Observe real adapter input; never record HTTP credentials, tokens or tickets.
-  await client.cdp("Page.addScriptToEvaluateOnNewDocument", { source: `window.reviewEvents=[];const originalFetch=window.fetch;
-    window.fetch=async(...args)=>{const response=await originalFetch(...args);if(String(args[0]).startsWith('/api/events')){
+  await client.cdp("Page.addScriptToEvaluateOnNewDocument", { source: `window.reviewEvents=[];window.registrationRequests=0;window.connectRequests=0;const originalFetch=window.fetch;
+    window.fetch=async(...args)=>{const path=String(args[0]);if(path==='/api/register')window.registrationRequests++;
+    if(path==='/api/connect')window.connectRequests++;
+    const response=await originalFetch(...args);
+    if(path==='/api/register'&&window.pauseRegistration)await new Promise(resolve=>window.releaseRegistration=resolve);
+    if(path.startsWith('/api/events')){
       const result=await response.clone().json();window.reviewEvents.push(...(result.events??[]));}return response;};` });
   await client.cdp("Page.navigate", { url: base }); await client.until("!!document.getElementById('login-open')");
   return client;
@@ -79,6 +83,45 @@ async function login(client, username, password) {
   assert.equal(await client.eval("document.getElementById('login-password').value"), password);
   await client.click("#login-submit"); await client.until("document.getElementById('connection-state').textContent==='Đã kết nối'");
   await client.until("window.reviewEvents.some(e=>e.type==='files.changed'&&e.data.state==='ready')");
+}
+async function registration(client, username, password) {
+  const emptyPasswords = "document.getElementById('login-password').value===''&&document.getElementById('register-password-confirm').value===''&&document.getElementById('login-password').type==='password'";
+  const fill = async (name, confirmation = password) => {
+    await client.eval("document.getElementById('login-username').value=''");
+    await client.type("login-username", name); await client.type("login-password", password);
+    await client.type("register-password-confirm", confirmation);
+  };
+  await client.click("#login-open"); await client.click("#account-mode");
+  assert.equal(await client.eval("!document.getElementById('register-confirm').hidden&&document.getElementById('login-password').autocomplete==='new-password'"), true);
+  await fill(username, "mismatch"); await client.click("#password-toggle");
+  assert.equal(await client.eval("document.getElementById('login-password').type==='text'&&document.getElementById('register-password-confirm').type==='text'&&document.getElementById('password-toggle').getAttribute('aria-label')==='Ẩn mật khẩu'"), true);
+  await client.click("#login-submit");
+  assert.equal(await client.eval(`(${emptyPasswords})&&document.getElementById('login-error').textContent.includes('không khớp')&&window.registrationRequests===0`), true);
+  await fill("   "); await client.click("#login-submit");
+  assert.equal(await client.eval(`(${emptyPasswords})&&document.getElementById('login-error').textContent.includes('hợp lệ')&&window.registrationRequests===0`), true);
+  await fill("x".repeat(1100)); await client.click("#login-submit");
+  await client.until("!document.getElementById('login-submit').disabled");
+  assert.equal(await client.eval(`(${emptyPasswords})&&document.getElementById('login-error').textContent.includes('quá dài')`), true);
+  await fill(username);
+  await client.eval("window.pauseRegistration=true");
+  await client.click("#login-submit"); await client.until("typeof window.releaseRegistration==='function'");
+  const requests = await client.eval("window.registrationRequests");
+  assert.equal(await client.eval(`(${emptyPasswords})&&document.getElementById('account-mode').disabled&&document.getElementById('login-submit').disabled`), true);
+  await client.eval("document.getElementById('login-form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))");
+  assert.equal(await client.eval("window.registrationRequests"), requests, "Pending REGISTER cannot submit twice");
+  await client.eval("window.pauseRegistration=false;window.releaseRegistration()");
+  await client.until("!document.getElementById('login-submit').disabled&&document.getElementById('login-notice').textContent.includes('thành công')");
+  assert.equal(await client.eval(`(${emptyPasswords})&&document.getElementById('login-username').value===${JSON.stringify(username)}&&document.getElementById('register-confirm').hidden&&window.connectRequests===0&&document.getElementById('connection-state').textContent==='Chưa kết nối'`), true);
+  await client.shot("registration-success.png");
+  await client.click("#account-mode"); await fill(username); await client.click("#login-submit");
+  await client.until("!document.getElementById('login-submit').disabled&&document.getElementById('login-error').textContent.includes('đã tồn tại')");
+  assert.equal(await client.eval(emptyPasswords), true);
+  await fill(username); await client.click("#account-mode");
+  assert.equal(await client.eval(emptyPasswords), true, "Mode switch clears credentials");
+  await client.type("login-password", password); await client.click("#login-close");
+  assert.equal(await client.eval(emptyPasswords), true, "Closing the dialog clears credentials");
+  assert.equal(await client.eval("location.search===''&&localStorage.length===0&&sessionStorage.length===0"), true);
+  report.checks.push("real HTTPS/TLS REGISTER: mismatch and invalid input, duplicate username, pending submit guard, password cleanup, success returns to LOGIN without auto-login or browser storage");
 }
 async function privateChat(client, username) {
   await client.click("#new-chat"); await client.type("user-search", username);
@@ -138,10 +181,11 @@ async function main() {
   await fs.mkdir(output, { recursive: true });
   const suffix = randomUUID().slice(0, 8), users = ["review-a-" + suffix, "review-b-" + suffix], password = "public-integrated-browser-only";
   report.users = users;
-  for (const username of users) { const peer = new LinePeer(+options.tcp, 5000, true); peers.push(peer); await peer.ready;
+  for (const username of users.slice(1)) { const peer = new LinePeer(+options.tcp, 5000, true); peers.push(peer); await peer.ready;
     peer.send("HELLO2"); assert.equal(await peer.read(), "WELCOME2"); peer.send({ action: "REGISTER", username, password });
     assert.equal(JSON.parse(await peer.read()).status, "REGISTER_SUCCESS"); peer.close(); }
   const a = await browser("A"), b = await browser("B");
+  await registration(a, users[0], password);
   await login(a, users[0], password); await login(b, users[1], password);
   for (const [client, other] of [[a, users[1]], [b, users[0]]]) await client.until(`!!document.querySelector('#users [data-user-id="${other}"]')`);
   report.checks.push("two independent Chrome profiles login; real FILE_SESSION ready; both online");

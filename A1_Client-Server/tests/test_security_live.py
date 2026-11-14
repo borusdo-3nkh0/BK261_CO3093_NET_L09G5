@@ -161,6 +161,77 @@ def send(http, token, session, text, recipient=None):
     )
 
 
+def test_registration_https_then_login_and_chat(integrated):
+    tcp, http = integrated
+    username = "web-Đức"
+    body = dict(username=username, password=PASSWORD)
+    assert api(http, "/api/register", body) == {"status": "REGISTER_SUCCESS"}
+    assert not http.sessions
+    assert tcp.session_manager.get_session(username) is None
+    assert username not in tcp.file_relay._usernames
+    assert api(http, "/api/register", body) == {"status": "REGISTER_FAILED"}
+    for invalid in (
+        dict(username="  ", password=PASSWORD),
+        dict(username=3, password=PASSWORD),
+        dict(username="invalid", password=""),
+        dict(username="invalid", password=None),
+        dict(username="Đ" * 1100, password=PASSWORD),
+    ):
+        with pytest.raises(HTTPError) as error:
+            api(http, "/api/register", invalid)
+        assert error.value.code == 400
+        response = json.loads(error.value.read())
+        assert isinstance(response["error"], str)
+        assert PASSWORD not in json.dumps(response)
+    assert not http.sessions
+    result = api(
+        http,
+        "/api/connect",
+        dict(sessionId=str(uuid.uuid4()), **body),
+    )
+    a_token, a = result["token"], http.sessions[result["token"]]
+    assert a.connected and a.crypto
+    b_token, b = login(tcp, http, "existing-bob")
+    send(http, a_token, a, "Đăng ký Web rồi chat")
+    wait(
+        lambda: any(
+            e["type"] == "message.upsert"
+            and e["data"]["text"] == "Đăng ký Web rồi chat"
+            for _, e in b.events
+        )
+    )
+    send(http, b_token, b, "Đăng nhập cũ trả lời", a.username)
+    wait(
+        lambda: any(
+            e["type"] == "message.upsert"
+            and e["data"]["text"] == "Đăng nhập cũ trả lời"
+            for _, e in a.events
+        )
+    )
+
+
+def test_registration_rejects_bad_ca_without_creating_account(integrated, tmp_path):
+    tcp, http = integrated
+    trusted = http.tls_context
+    create_certificates(tmp_path / "wrong-ca")
+    http.tls_context = client_context(tmp_path / "wrong-ca/ca.pem")
+    try:
+        with pytest.raises(HTTPError) as error:
+            # Browser still trusts HTTPS; only the bridge-to-P2 CA is wrong.
+            request = Request(
+                f"https://127.0.0.1:{http.server_port}/api/register",
+                json.dumps(dict(username="bad-ca", password=PASSWORD)).encode(),
+                {"Content-Type": "application/json"},
+            )
+            urlopen(request, timeout=20, context=trusted)
+        assert error.value.code == 503
+        assert PASSWORD not in error.value.read().decode()
+        assert "bad-ca" not in tcp.auth_manager.users
+        assert not http.sessions
+    finally:
+        http.tls_context = trusted
+
+
 def test_current_login_online_chat_and_ticket_revocation(integrated):
     tcp, http = integrated
     a_token, a = login(tcp, http, "integrated-alice")

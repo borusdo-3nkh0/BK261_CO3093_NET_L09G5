@@ -1,5 +1,32 @@
 # Kế hoạch kiểm thử P3
 
+## Đăng ký tài khoản từ Web — 2026-11-14
+
+Đối chiếu `server/auth_manager.py`, `client_handler.py` và `socket_server.py`: username là chuỗi có ký tự không phải khoảng trắng; password là chuỗi không rỗng. P2 trả REGISTER_SUCCESS hoặc REGISTER_FAILED; sau validation trên, REGISTER_FAILED nghĩa là username đã tồn tại. Không thêm chính sách password hay sửa protocol/P2. Account/hash vẫn chỉ trong RAM P2, mất khi restart.
+
+Hộp tài khoản dùng chung hai chế độ Đăng nhập/Đăng ký; đăng ký có xác nhận password và nút mắt điều khiển cả hai ô. UI gọi adapter.register → POST `/api/register` → bridge mở TLS xác minh chứng thư, HELLO2/WELCOME2 và REGISTER theo JSON newline hiện có. Kết nối đăng ký được đóng sau phản hồi, không tạo phiên LOGIN/context/ticket và không làm đổi phiên chat hiện tại. Thành công trở về Đăng nhập, điền username, xóa password, không tự đăng nhập. Bridge giữ giới hạn frame xác thực 1.024 byte hiện có.
+
+Form chặn submit lặp khi Promise đang chờ; khóa chuyển chế độ/input trong lúc chờ. Mật khẩu chỉ dùng tạm cho request, không ghi vào URL/storage/log; xóa cả hai ô và ẩn lại khi submit (kể cả validation lỗi), đổi chế độ hoặc đóng hộp. Thông báo UI cố định cho thành công, trùng tên, xác nhận lệch, dữ liệu không hợp lệ/quá dài và lỗi kết nối; không hiển thị exception thô. REGISTER từ chối plaintext và chứng thư sai. Test phát hiện SSLCertVerificationError cũng thuộc ValueError; đã bắt riêng trước validation để trả lỗi kết nối 503 thay vì hiểu nhầm là lỗi dữ liệu 400.
+
+| Ca mới / bổ sung | Thao tác và kỳ vọng |
+| --- | --- |
+| HTTPS → TLS P2 thật | Đăng ký username Unicode mới; thành công không tạo session/ticket, đăng ký lần hai trả REGISTER_FAILED; sau đó LOGIN và chat hai chiều với account tạo theo luồng cũ |
+| Biên HTTP / TLS | Origin sai bị 403; JSON/type/rỗng/whitespace và frame quá dài bị 400; không tạo account hoặc phiên. Thiếu TLS bị từ chối; CA sai bị 503, không fallback/plaintext hoặc lộ password |
+| Hai Chrome hiện có | A đăng ký từ Web, B dùng REGISTER TCP/TLS cũ. Xác nhận lệch và username whitespace không gọi API; frame quá dài hiện lỗi dễ hiểu. Giữ phản hồi REGISTER thật để kiểm submit lặp chỉ tạo một request; thành công quay về LOGIN, username có sẵn, password rỗng và chưa kết nối |
+| Cleanup form và hồi quy | Nút mắt giữ nội dung và đổi đúng nhãn, mode/close/submit xóa mật khẩu; duplicate hiện đúng lỗi; không URL/storage. Sau LOGIN tiếp tục giữ chat chung/riêng, online/offline, file hai chiều/accept/reject/hash, ACK và reconnect hiện có |
+
+Lượt targeted Python sau sửa mapping chứng thư: **15 passed**, 0 skip, 10,758s; `runtime/register-target/check-9e1097af1d6f489eb187b61ed9b659b0/`. Lượt đầu 14 passed/1 failed vì kỳ vọng HTTP 503 cho CA sai nhưng handler trả 400; không bỏ assertion.
+
+| Kiểm tra thực chạy Windows/Python 3.14.4 | Kết quả |
+| --- | --- |
+| `python -B p3.py check --timeout 600`, run `check-8a4953403f4c4916ac9f420f30bc183c` | **PASS 253,102s**, audit 6 JSON PASS; base `352c92e` + tracked changes lúc chạy |
+| Independent | **120 passed**, không skip; Ruff check/format, JS syntax và helper đạt; suite 21,959s |
+| UI/demo | **PASS 5,933s**, giữ 242 assertion chính thức ở mỗi desktop 1440×900/1366×768/1100×750 và 246 ở mobile 390×844; demo vẫn dùng adapter riêng |
+| Integrated Python + hai Chrome/P2/relay thật | **188 passed + 58 subtest**, không skip; 3 large/load deselected có chủ ý. Suite 171,157s, browser 44,595s. A đăng ký Web rồi LOGIN; B đăng ký TCP/TLS theo luồng cũ rồi LOGIN; chat/file hai chiều, size/hash/accept/reject/online và reconnect giữ nguyên |
+| Security | **25 passed**, không skip, suite 54,002s; thêm REGISTER HTTPS/TLS/Unicode và CA sai. HTTPS/browser và các ca key/tag/AAD/nonce/replay/retry hiện có đều đạt |
+
+Bằng chứng ở runtime cùng run ID; ảnh `integrated/browser/integrated-1ff4937b-d623-4256-bbcb-7833e3f562a5/registration-success.png` đã kiểm trực quan: thông báo thành công, username có sẵn, password trống và chưa kết nối. Không commit runtime, credential/key/ticket hoặc dữ liệu thử. P2/relay thật do fixture khởi tạo trong cùng checkout, không dùng stub/ticket mẫu và không dừng server người dùng đang chạy. Windows CI chạy lại khi push nhánh handoff; đối chiếu run theo SHA bàn giao. Không chọn legacy/large/load trong lượt local này; chưa sửa F5 hoặc lưu account lâu dài.
+
 ## FIN lặp không chặn vòng nhận UDP — 2026-11-14
 
 PR #3 từng FAIL tại `test_bidirectional_concurrent_files_and_same_names` với `FIN retry limit exceeded` trong run `43558838159`. Lượt chẩn đoán riêng Windows/Python 3.14.10, run [43562061593](https://github.com/ducbui2007-ops/BK261_CO3093_NET_L09G5/actions/runs/43562061593), giữ nguyên retry/timeout/assertion: **20/20 lượt đạt, 80 transfer**, chưa tái hiện FAIL cũ. Tuy nhiên timeline đo được FIN lặp gọi `begin_verification()` chờ lock của worker verify/fsync **260,230 ms**; COMPLETE thật của transfer ngược chiều đã qua relay nhưng client xử lý muộn **179,347 ms**. Relay vẫn ở trạng thái COMPLETED đúng. Đây là điểm chặn đã đo được, chưa phải bằng chứng xác định toàn bộ nguyên nhân FAIL cũ.

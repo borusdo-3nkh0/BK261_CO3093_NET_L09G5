@@ -39,7 +39,11 @@ Terminal 2 — HTTPS UI/bridge cổng 8766:
 
 Mở **https://127.0.0.1:8766/**. Không dùng HTTP. Chứng thư/CA thiếu, sai CA hoặc sai hostname sẽ thất bại; không tự hạ xuống plaintext. Có thể cấu hình `--cert`, `--key`, `--ca`, `--port`, `--p2-port`; xem `--help`. Constructor không truyền TLS chỉ phục vụ fixture v1/hồi quy, không phải cấu hình triển khai.
 
-P2 giữ account trong RAM; UI chỉ LOGIN. Tạo hai account thử bằng REGISTER qua TLS:
+Trong Web, bấm **Đăng nhập** → **Chưa có tài khoản? Đăng ký**. Nhập username, password và xác nhận password. Nút mắt hiện/ẩn cả hai ô; mặc định ẩn. Đăng ký thành công sẽ trở về Đăng nhập, giữ username và xóa mật khẩu; **không tự đăng nhập**. Nhập lại mật khẩu để đăng nhập. Username trùng và dữ liệu không hợp lệ có thông báo riêng; mỗi lần submit chỉ có một yêu cầu đang chờ.
+
+**Tài khoản chỉ nằm trong RAM của P2, mất khi khởi động lại P2.** Không có database hoặc tài khoản riêng trong bridge. Theo validation P2 hiện tại, username phải có ký tự không phải khoảng trắng và password không rỗng; không thêm quy tắc mật khẩu mới. Bridge giữ giới hạn frame xác thực 1.024 byte hiện có. REGISTER dùng kết nối TLS được xác minh, không tạo phiên LOGIN hoặc cấp ticket; mật khẩu không vào URL, browser storage hoặc log và được xóa khỏi form khi submit, đổi chế độ hay đóng hộp.
+
+Tùy chọn tạo account thử từ CLI qua cùng REGISTER/TLS của P2:
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 -c @'
