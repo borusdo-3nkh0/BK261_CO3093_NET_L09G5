@@ -1,0 +1,55 @@
+%% ============================================================
+%% FILE: cs.tex
+%% DESC: Source code listing, algorithms, pseudocode
+%% ============================================================
+
+%% --- Source Code ---
+
+\usepackage{listings}                   % syntax-highlighted code blocks
+
+\definecolor{colorCodeString}{HTML}{2d6e4e}     % string literals
+\definecolor{colorCodeComment}{HTML}{b54500}    % inline comments
+
+\lstdefinestyle{codeStyle}{
+    backgroundcolor   = \color{colorBg},
+    commentstyle      = \color{colorCodeComment},
+    keywordstyle      = \color{colorLink}\bfseries,
+    numberstyle       = \tiny\color{colorTextSoft},
+    stringstyle       = \color{colorCodeString},
+    basicstyle        = \ttfamily\footnotesize\color{colorText},
+    breakatwhitespace = false,
+    breaklines        = true,
+    captionpos        = b,
+    keepspaces        = true,
+    numbers           = left,
+    numbersep         = 5pt,
+    showspaces        = false,
+    showstringspaces  = false,
+    showtabs          = false,
+    tabsize           = 2,
+    frame             = single,
+    rulecolor         = \color{colorPrimary},
+}
+\lstset{style=codeStyle}
+
+\lstdefinestyle{json}{
+    style              = codeStyle,
+    numbers            = none,
+    keywordstyle       = \color{colorLink}\bfseries,
+    stringstyle        = \color{colorCodeString},
+    morestring         = [b]",
+    showstringspaces   = false,
+    breaklines         = true,
+    columns            = fullflexible,
+}
+
+
+%% --- Algorithms and Pseudocode ---
+
+\usepackage{algorithm}                  % float wrapper: \begin{algorithm}
+\usepackage{algorithmicx}               % algorithm syntax engine
+\usepackage{algpseudocode}              % pseudocode commands: \State, \If, \For, \While
+
+% Relabel default keywords
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}

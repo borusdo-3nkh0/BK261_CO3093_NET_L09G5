@@ -1,0 +1,43 @@
+%% ============================================================
+%% FILE: math.tex
+%% DESC: Math, units, advanced figures/tables, scientific plots
+%% ============================================================
+
+%% --- Mathematics ---
+
+\usepackage{amssymb}                    % math symbols: \mathbb{R}, \mathcal{L}
+\usepackage{amsfonts}                   % math fonts: blackboard bold, fraktur
+\usepackage{mathtools}                  % amsmath extension: \coloneqq, \DeclarePairedDelimiter
+
+%% --- Units and Physical Notation ---
+
+\usepackage{siunitx}                    % SI units: \SI{9.8}{\meter\per\second\squared}
+\usepackage{physics}                    % physics notation: \grad, \div, \curl, \laplacian
+\AtBeginDocument{\RenewCommandCopy\qty\SI} % NOTE: resolves conflict between physics and siunitx
+
+%% --- Figures ---
+
+\usepackage{subcaption}                 % subfigures: \begin{subfigure}, \subcaption{}
+\usepackage{wrapfig}                    % text-wrapped figures: \begin{wrapfigure}
+
+%% --- Tables ---
+
+\usepackage{array}                      % extended column spec: >{\centering}p{3cm}
+\usepackage{tabularx}                   % auto-width table: \begin{tabularx}{\textwidth}{X}
+\usepackage{longtable}                  % multi-page tables
+\usepackage{multirow}                   % row-spanning cells: \multirow{3}{*}{text}
+\usepackage{multicol}                   % multi-column layout: \begin{multicols}{2}
+
+%% --- Scientific Plots ---
+
+\usepackage{pgfplots}                   % function plots and scientific charts
+\pgfplotsset{compat=1.18}
+
+%% --- Math Shortcuts ---
+
+\newcommand{\N}{\mathbb{N}}             % natural numbers
+\newcommand{\Z}{\mathbb{Z}}             % integers
+\newcommand{\Q}{\mathbb{Q}}             % rationals
+\newcommand{\I}{\mathbb{I}}             % irrationals
+\newcommand{\R}{\mathbb{R}}             % reals
+\newcommand{\C}{\mathbb{C}}             % complex numbers

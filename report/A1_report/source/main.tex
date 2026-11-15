@@ -1,0 +1,125 @@
+%% ============================================================
+%% FILE: main.tex
+%% DESC: Root document — language, font, preamble, metadata
+%% ============================================================
+%% USAGE — setup steps:
+%%   1. Choose language       (LANGUAGE section)
+%%   2. Choose font           (FONT section)
+%%   3. Margin setup          (PAGE LAYOUT section)
+%%   3. Uncomment preambles   (PREAMBLE section)
+%%   4. Fill document info    (DOCUMENT INFO section)
+%%   5. Add content inside \begin{document}
+%% ============================================================
+
+\documentclass[12pt, a4paper]{report}
+\input{Preamble/base.tex}
+
+%% --- Language ---
+
+% USAGE: Uncomment one block. Comment out the other two.
+
+% English only
+% \usepackage[T1]{fontenc}
+% \usepackage[english]{babel}
+
+% Vietnamese only
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+
+% Bilingual (Default - Vietnamese + English)
+% \usepackage[T1,T5]{fontenc}
+% \usepackage[vietnamese,english]{babel}
+
+%% --- Font ---
+
+% USAGE: Uncomment one. Comment out the others.
+
+\usepackage{lmodern}                    % Latin Modern (default)
+% \usepackage{times}                      % Times New Roman
+% \usepackage{palatino}                   % Palatino
+% \usepackage{charter}                    % Charter
+
+%% --- Page Layout ---
+
+% USAGE: Uncomment one block. Comment out the other.
+
+% IEEE
+\geometry{left=15.7mm, right=15.7mm, top=19mm, bottom=32mm,
+          headheight=15pt, headsep=10pt, footskip=20pt}
+          
+% Vietnamese standard (HCMUT)
+% \geometry{left=3cm, right=2cm, top=2.5cm, bottom=2.5cm,
+%           headheight=1.2cm, headsep=0.4cm, footskip=0.8cm}
+
+%% --- Preamble ---
+
+% USAGE: Uncomment the modules you need.
+\input{Preamble/styling.tex}            % typography, headings, header/footer, TOC, lists
+\input{Preamble/math.tex}               % math: amsmath, siunitx, shortcuts
+\input{Preamble/cs.tex}                 % CS: listings, algorithm, pseudocode
+% \input{Preamble/citation_ieee.tex}      % citation style: IEEE [1][2]
+% \input{Preamble/citation_apa.tex}       % citation style: APA (Author, year)
+
+%% --- Document Info ---
+
+% USAGE: Fill in values below. These are used in the cover page and header.
+\newcommand{\docAuthor}     {}        % full name
+\newcommand{\docAuthorId}   {}     % MSSV tác giả
+\newcommand{\docGroup}      {5}         % group name or number
+\newcommand{\docTitle}      {Assignment 1: Distributed and Streaming-Based Client-Server Collaboration Application}         % document title
+\newcommand{\docDate}       {\today}        % submission date
+
+\newcommand{\docCourse}     {Mạng máy tính}        % course name
+\newcommand{\docCourseCode} {CO3039}   % course code
+\newcommand{\docClass}      {L09}    % class code
+\newcommand{\docInstructor} {Bùi Xuân Giang}    % supervising lecturer
+\newcommand{\docFaculty}    {Khoa Khoa học và Kỹ thuật Máy tính}       % faculty / department
+
+% PDF metadata (auto-filled from document info above)
+\hypersetup{
+    pdftitle   = {\docTitle},
+    pdfauthor  = {\docAuthor},
+    pdfsubject = {\docCourse},
+}
+
+%% --- Bibliography ---
+
+% USAGE: Uncomment when using citation_ieee.tex or citation_apa.tex
+% \addbibresource{refs.bib}
+
+%% ============================================================
+\begin{document}
+%% ============================================================
+
+%--- Cover page ---
+\input{cover.tex}
+
+%--- Contribution Table ---
+\input{contribution.tex}
+
+%--- Table of contents ---
+\input{Preamble/toc.tex}
+
+%% ============================================================
+%% CONTENT
+%% ============================================================
+
+\input{Content/content_1.tex} \newpage
+\input{Content/content_2.tex} \newpage
+\input{Content/content_3.tex} \newpage
+\input{Content/content_4.tex} \newpage
+\input{Content/content_5.tex} \newpage
+\input{Content/content_6.tex} \newpage
+\input{Content/content_7.tex} \newpage
+\input{Content/content_8.tex} \newpage
+\input{Content/content_9.tex} \newpage
+\input{Content/content_10.tex} \newpage
+
+% --- Bibilography ---
+
+% USAGE: Uncomment to print bibliography (requires citation_ieee/apa + refs.bib)
+% \clearpage
+% \printbibliography
+
+%% ============================================================
+\end{document}

@@ -1,0 +1,69 @@
+\section{Truyền file UDP tin cậy}
+\subsection{Chia chunk và tái lắp ghép}
+File được chia thành các chunk, mỗi chunk mang tối đa 996 byte dữ liệu gốc. Mỗi gói DATA mang số thứ tự chunk, nên người nhận ghi dữ liệu trực tiếp vào đúng vị trí trong file (số thứ tự nhân với \texttt{chunk\_size}), kể cả khi gói đến sai thứ tự. Trạng thái các chunk đã nhận được theo dõi bằng một bitmap có kích thước giới hạn (tối đa 256 KiB mỗi file). Chunk cuối chứa đúng phần dữ liệu còn lại, còn file rỗng không có gói DATA nào và đi thẳng từ ACCEPT sang FIN.
+
+\subsection{Gửi lại có chọn lọc (selective repeat)}
+Người nhận gửi ACK riêng cho từng chunk đã ghi xong. Người gửi giữ một cửa sổ các chunk đang chờ xác nhận, mỗi chunk có đồng hồ riêng, và chỉ gửi lại những chunk đã hết thời gian chờ chứ không gửi lại cả cửa sổ. Nếu nhận một chunk trùng lặp, người nhận chỉ gửi lại ACK mà không ghi lần hai. Người gửi chỉ giữ phần cửa sổ đang chờ trong bộ nhớ, và việc đọc file, tính hash đều dùng các lần đọc có giới hạn dung lượng. Khi bật mã hóa, mỗi lần gửi lại dùng một nonce mới (mục 6).
+
+\subsection{Kiểm soát cửa số và tốc độ}
+Cửa sổ ban đầu là 4 chunk và tăng dần theo các ACK sạch tới tối đa 32 chunk. Khi hết thời gian chờ, cửa sổ giảm một nửa và đồng hồ gửi lại được kéo dài (backoff). ACK của chunk đã gửi lại không được dùng để đo RTT, vì không biết ACK đó trả lời lần gửi nào. Mọi người gửi chạy đồng thời trên một client dùng chung một bộ pacing, giới hạn mặc định không quá một gói mỗi 2 ms để tránh dồn gói. Đây là một thiết kế AIMD nhỏ giống TCP, không phải BBR hay CUBIC, và nhóm không tuyên bố đáp ứng hai thuật toán đó.
+
+Trong lần chạy CI đầu trên Windows, bộ pacing bị ảnh hưởng bởi độ phân giải thời gian chờ thô của hệ thống. Nhóm đã đổi sang các lần ngủ ngắn theo đồng hồ đơn điệu (monotonic) và vẫn kiểm tra tín hiệu dừng định kỳ.
+
+\subsection{Thông điệp điều khiển cũng có thể mất}
+Nếu một thông điệp điều khiển bị mất thì file có thể đã nhận đủ mà người gửi vẫn chờ mãi. Vì vậy các cặp \texttt{BIND}/\texttt{CHALLENGE}/\texttt{PROVE}/\texttt{BOUND}, \texttt{OFFER}/\texttt{ACCEPT} và \texttt{FIN}/\texttt{COMPLETE} đều có cơ chế gửi lại với thời gian chờ tăng dần: bắt đầu từ 1 giây, tối đa 4 giây, nhiều nhất 8 lần gửi lại. Một yêu cầu bị gửi lặp luôn nhận cùng một câu trả lời, không cấp phát lại file. Relay và client giữ lại một số kết quả cuối (receipt) có giới hạn trong 60 giây, nên khi người gửi lặp \texttt{FIN} vì mất \texttt{COMPLETE}, hệ thống trả lại đúng kết quả đã xác minh và không ghi file lần hai.
+
+\subsection{Xác minh và công bố file}
+Dữ liệu nhận được ghi vào một thư mục tạm riêng, duy nhất cho từng lượt, bên trong thư mục tải về mà người nhận chọn; người nhận không bao giờ dùng đường dẫn do người gửi cung cấp. Khi nhận FIN và đủ chunk, người nhận kiểm tra cả kích thước và SHA-256 của toàn bộ file, sau đó mới đổi tên nguyên tử thành file chính thức và gửi COMPLETE. File đã tồn tại không bị ghi đè, nên nhiều file trùng tên vẫn nằm trong các thư mục riêng. Việc tính hash chạy trên các worker có giới hạn số lượng, không chặn vòng nhận UDP. Nếu kích thước hoặc hash không khớp, lượt truyền thất bại, không có file nào được công bố và file tạm bị xóa.
+
+Cần phân biệt hai việc: SHA-256 phát hiện file bị thiếu hoặc hỏng khi ghép lại, còn việc chống sửa đổi trên đường truyền do lớp xác thực gói tin (mục 6) đảm nhiệm.
+
+\subsection{Hủy, hết hạn và dọn dẹp}
+Mọi lượt truyền đều có hạn chót. Khi người nhận từ chối, hết số lần gửi lại, hết hạn, gặp lỗi socket hoặc bị hủy, lượt truyền thất bại, file tạm bị xóa và các lượt truyền khác vẫn chạy bình thường. CANCEL chỉ là cố gắng tối đa (best effort); nếu gói CANCEL cũng mất, việc hết hạn do không hoạt động (60 giây) bảo đảm tài nguyên vẫn được giải phóng. Nếu một bên ngắt kết nối, relay đánh dấu các lượt đang chạy là thất bại và báo cho bên còn lại.
+
+\subsection{Cô lập giữa các đường truyền và giới hạn tài nguyên}
+Mỗi lượt truyền có mã, không gian số thứ tự, cửa sổ và file riêng, nên một lượt bị kẹt không chặn lượt khác hay chat. Các giới hạn mặc định:
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.3}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{3.2cm}
+        @{}
+    }
+        \toprule
+        \textbf{Tài nguyên} & \textbf{Giới hạn} \\
+        \midrule
+
+        Kích thước mỗi file
+        & 256 MiB \\
+
+        Số lượt truyền mỗi client
+        & 8 \\
+
+        Số lượt truyền đang chạy trên relay
+        & 64 \\
+
+        Số phiên đăng ký trên relay
+        & 20 \\
+
+        Thời gian không hoạt động của một lượt
+        & 60 giây \\
+
+        Thời gian gửi tối đa của một lượt (người gọi đặt)
+        & 300 giây (mặc định) \\
+
+        Kích thước datagram tối đa
+        & 1.084 byte \\
+
+        \bottomrule
+    \end{tabularx}
+    \caption{Các giới hạn tài nguyên trong giao thức truyền file UDP}
+\end{table}
+
+\subsection{Kết quả kiểm chứng và giới hạn}
+Các kiểm thử cho phần này gồm mất DATA và ACK, gói trùng và gói đảo thứ tự, mất từng loại gói điều khiển (OFFER, ACCEPT, FIN, COMPLETE...), hash sai không được công bố, và một lượt truyền bị kẹt không chặn lượt khác (chi tiết ở mục 8). File 32 MiB truyền đạt cả kiểm tra hash và dọn dẹp. File 256 MiB đã qua bước chấp nhận nhưng việc truyền trọn vẹn vẫn thất bại do quá thời gian gửi 300 giây, và nhóm không đổi code production để làm test đạt (mục 9).

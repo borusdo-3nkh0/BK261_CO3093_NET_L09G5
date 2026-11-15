@@ -1,0 +1,87 @@
+\section{Hạn chế và phát triển}
+Hệ thống đã đáp ứng các chức năng chính của đề trong phạm vi localhost trên Windows. Phần này liệt kê trung thực những giới hạn đã biết, để người đọc không hiểu nhầm phạm vi của kết quả, cùng với hướng phát triển để khắc phục.
+
+
+
+\begingroup
+\small
+\renewcommand{\arraystretch}{1.4}
+
+\begin{xltabular}{\textwidth}{
+    @{}
+    >{\raggedright\arraybackslash}p{2.6cm}
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    @{}
+}
+    \toprule
+    \textbf{Nhóm} & \textbf{Hạn chế hiện tại} & \textbf{Hướng phát triển} \\
+    \midrule
+    \endfirsthead
+
+    \toprule
+    \textbf{Nhóm} & \textbf{Hạn chế hiện tại} & \textbf{Hướng phát triển} \\
+    \midrule
+    \endhead
+
+    \bottomrule
+    \endfoot
+
+    Dữ liệu và phiên
+    & Tài khoản và danh sách phiên chỉ lưu trong bộ nhớ (RAM), nên khi server khởi động lại, mọi tài khoản đều mất. Chưa có cơ sở dữ liệu.
+    & Lưu tài khoản vào cơ sở dữ liệu bền vững; giữ nguyên cách băm mật khẩu hiện có. \\
+
+    \addlinespace
+
+    Ý nghĩa của xác nhận
+    & \texttt{UNICAST\_SUCCESS} chỉ cho biết server đã gửi xong dữ liệu vào socket của người nhận, không phải người nhận đã đọc. \texttt{UNICAST\_FAILED} không phân biệt người nhận offline với lỗi gửi. \texttt{BROADCAST\_SUCCESS} vẫn được trả về khi không có người nhận nào. Chat không tự gửi lại, và chưa có hộp thư gửi offline hay trạng thái ``đã xem''.
+    & Thêm xác nhận đã nhận ở tầng ứng dụng, phân biệt rõ các mã lỗi và bổ sung hộp thư gửi offline (outbox). \\
+
+    \addlinespace
+
+    Kiểm tra tên người dùng
+    & Server chấp nhận tập tên rộng hơn quy tắc của giao thức file (1 đến 64 byte UTF-8, không khoảng trắng ở hai đầu, không ký tự điều khiển). Tài khoản có tên không hợp lệ theo quy tắc đó có thể đăng ký được nhưng cấp phiên file sẽ trả \texttt{FILE\_SESSION\_FAILED}.
+    & Áp dụng cùng một quy tắc kiểm tra tên ngay từ lúc đăng ký. \\
+
+    \addlinespace
+
+    Bảo mật
+    & Không phải mã hóa đầu cuối (E2EE): server và relay đọc được nội dung. Chứng thư và CA là bản thử, tạo cục bộ và hết hạn sau 30 ngày. Chưa hardening cho môi trường công khai và chưa có khóa nhóm.
+    & Nghiên cứu E2EE và khóa nhóm; dùng chứng thư từ CA thật khi triển khai ra ngoài localhost. \\
+
+    \addlinespace
+
+    Chống dò mật khẩu
+    & Chưa có giới hạn số lần đăng nhập hoặc đăng ký, trong khi mỗi lần băm mật khẩu tốn nhiều tài nguyên.
+    & Thêm giới hạn tần suất (rate limit) và khóa tạm thời theo tài khoản hoặc địa chỉ. \\
+
+    \addlinespace
+
+    Giao thức và yêu cầu của đề
+    & Chat đi qua TCP, chỉ truyền file đi qua UDP. Đề có nhắc UDP streaming và các thuật toán BBR, CUBIC; cơ chế điều khiển tắc nghẽn của nhóm là một thiết kế AIMD đơn giản, không phải BBR hay CUBIC. Các điểm mơ hồ này chưa được giảng viên làm rõ.
+    & Làm rõ yêu cầu với giảng viên; nếu cần, bổ sung chat qua UDP hoặc điều khiển tắc nghẽn nâng cao. \\
+
+    \addlinespace
+
+    Truyền file lớn
+    & File 256 MiB truyền thất bại do quá thời gian gửi 300 giây. File tối đa 256 MiB. Khi đăng ký lại điểm cuối UDP, các lượt truyền đang chạy bị hủy chứ không được tiếp tục; chưa có chức năng nối lại (resume). File lớn nhất đã kiểm thử qua trình duyệt là 8 MiB.
+    & Điều tra và xử lý nguyên nhân quá thời gian ở file lớn; thêm cơ chế resume. \\
+
+    \addlinespace
+
+    Phạm vi kiểm thử
+    & Mọi kiểm thử chạy trên localhost, trên Windows. Chưa kiểm thử LAN nhiều máy, đĩa đầy hay hiệu năng.
+    & Chạy nghiệm thu trên mạng LAN hoặc VPN nhiều máy; bổ sung kiểm thử đĩa đầy và benchmark. \\
+
+    \addlinespace
+
+    Vận hành server
+    & Điểm khởi động chưa xử lý tín hiệu dừng, nên việc tắt server chưa được dọn dẹp chủ động.
+    & Bắt tín hiệu dừng và gọi quy trình dừng sạch của server. \\
+
+\end{xltabular}
+\endgroup
+
+
+
+Những hạn chế trên đều đã được ghi nhận trong quá trình kiểm thử và không ảnh hưởng đến các kết quả đã trình bày ở mục 8. Nhóm không tuyên bố hệ thống sẵn sàng cho môi trường công khai.

@@ -1,0 +1,152 @@
+%% ============================================================
+%% FILE: cover.tex
+%% DESC: Cover page — university header, title block, author info
+%% ============================================================
+
+\begin{titlepage}
+  \newgeometry{margin=2cm}
+
+  %% --- TikZ Border ---
+
+  \begin{tikzpicture}[remember picture, overlay]
+
+    % Anchor points along each edge (offset inward from corners)
+    \coordinate (N)  at ([shift={( 0.0cm,-1.35cm)}] current page.north);
+    \coordinate (S)  at ([shift={( 0.0cm, 1.35cm)}] current page.south);
+    \coordinate (W)  at ([shift={( 1.35cm, 0.0cm)}] current page.west);
+    \coordinate (E)  at ([shift={(-1.35cm, 0.0cm)}] current page.east);
+
+    % Corner bracket origins
+    \coordinate (NW) at ([shift={( 1.5cm,-1.5cm)}] current page.north west);
+    \coordinate (NE) at ([shift={(-1.5cm,-1.5cm)}] current page.north east);
+    \coordinate (SW) at ([shift={( 1.5cm, 1.5cm)}] current page.south west);
+    \coordinate (SE) at ([shift={(-1.5cm, 1.5cm)}] current page.south east);
+
+    % Corner bracket decorations (thin lines)
+    \draw[line width = 0.05cm, color = colorPrimary]
+      (NW) +(-0.15, 0.15) |- +( 0.25,-0.15) |- (N)
+      (NW) +(-0.15, 0.15) -| +( 0.15,-0.25) -| (W)
+      (NE) +( 0.15, 0.15) |- +(-0.25,-0.15) |- (N)
+      (NE) +( 0.15, 0.15) -| +(-0.15,-0.25) -| (E)
+      (SW) +(-0.15,-0.15) |- +( 0.25, 0.15) |- (S)
+      (SW) +(-0.15,-0.15) -| +( 0.15, 0.25) -| (W)
+      (SE) +( 0.15,-0.15) |- +(-0.25, 0.15) |- (S)
+      (SE) +( 0.15,-0.15) -| +(-0.15, 0.25) -| (E)
+      ;
+
+    % Outer border rectangle (thick)
+    \draw[line width = 0.15cm, color = colorTextSoft]
+      (SW) -- (NW) -- (NE) -- (SE) -- cycle;
+
+  \end{tikzpicture}
+
+  %% --- University Header ---
+
+  \begin{center}
+    \textcolor{colorText}{\large\bfseries
+      \iflanguage{vietnamese}{%
+        ĐẠI HỌC QUỐC GIA THÀNH PHỐ HỒ CHÍ MINH\\
+        TRƯỜNG ĐẠI HỌC BÁCH KHOA%
+      }{%
+        VIETNAM NATIONAL UNIVERSITY HO CHI MINH CITY\\
+        HO CHI MINH CITY UNIVERSITY OF TECHNOLOGY%
+      }\\[0.5em]
+      \MakeUppercase{\docFaculty}
+    }
+  \end{center}
+
+  %% --- Logo ---
+
+  \vspace{-2\topsep}
+  \begin{center}
+    \includegraphics[width=7cm]{Assets/logo.png}
+  \end{center}
+
+  %% --- Course and Title ---
+
+  \vspace{-2\topsep}
+  \begin{center}
+    \begin{minipage}{0.9\textwidth}
+      \begin{flushleft}
+        \textcolor{colorTextSoft}{%
+          \textbf{\iflanguage{vietnamese}{Môn}{Course}}%
+          \textmd{: \docCourse \, (\docCourseCode)}
+        }
+      \end{flushleft}
+
+      \vspace{-3\topsep}
+      \begin{center}
+        \setstretch{1.6}
+        \textcolor{colorPrimary}{\rule{\textwidth}{1.5pt}}\\[1em]
+        \textcolor{colorText}{\Large\bfseries\MakeUppercase{\docTitle}}\\
+        \textcolor{colorPrimary}{\rule{\textwidth}{1.5pt}}
+      \end{center}
+    \end{minipage}
+  \end{center}
+
+  \vspace{\stretch{0.1}}
+
+  %% --- Author Info ---
+
+  % USAGE: Use INDIVIDUAL block for solo reports, GROUP block for team reports.
+  %        Uncomment the block you need; comment out the other.
+
+  % -- Individual layout --
+
+  % \begin{center}
+  %   \begin{tabular}{ll}
+  %     \textbf{\iflanguage{vietnamese}{Giảng viên hướng dẫn}{Instructor}}%
+  %       & : \docInstructor\\[0.3em]
+  %     \textbf{\iflanguage{vietnamese}{Sinh viên thực hiện}{Student}}%
+  %       & : \docAuthor\\
+  %     \textbf{MSSV}%
+  %       & : \docAuthorId\\
+  %     \textbf{\iflanguage{vietnamese}{Lớp}{Class}}%
+  %       & : \docClass\\
+  %   \end{tabular}
+  % \end{center}
+
+  % -- Group layout --
+
+  \begin{center}
+    \begin{tabular}{ll}
+      \textbf{\iflanguage{vietnamese}{Giảng viên hướng dẫn}{Instructor}}%
+        & : \docInstructor\\
+      \textbf{\iflanguage{vietnamese}{Lớp}{Class}}%
+        & : \docClass\\
+      \textbf{\iflanguage{vietnamese}{Nhóm}{Group}}%
+        & : \docGroup\\
+    \end{tabular}\par
+
+    \vspace{0.5\topsep}
+    \begin{tabularx}{0.7\textwidth}{|
+      >{\centering\arraybackslash}p{0.05\textwidth}|
+      >{\raggedright\arraybackslash}X|
+      >{\centering\arraybackslash}p{0.1\textwidth}|}
+      \hline
+      \textbf{\iflanguage{vietnamese}{STT}{No.}} &
+      \textbf{\iflanguage{vietnamese}{Sinh viên thực hiện}{Student}} &
+      \textbf{\iflanguage{vietnamese}{MSSV}{ID}}\\
+      \hline
+      1 & Nguyễn Thanh Nguyên & 2412359 \\
+      2 & Bùi Quang Đức & 2410796 \\
+      3 & Đỗ Anh Khoa & 2452526 \\
+      4 & Phạm Quốc Huy & 2411261 \\
+      5 & Nguyễn Thị Thúy Hằng & 2310904 \\
+      \hline
+    \end{tabularx}
+  \end{center}
+
+  \vfill
+
+  %% --- Date ---
+
+  \begin{center}
+    \textcolor{colorSecondary}{\footnotesize\itshape
+      \iflanguage{vietnamese}{Tp. Hồ Chí Minh}{Ho Chi Minh City}%
+      \, \docDate
+    }
+  \end{center}
+
+  \restoregeometry
+\end{titlepage}

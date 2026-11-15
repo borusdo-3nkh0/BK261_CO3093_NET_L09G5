@@ -1,0 +1,48 @@
+% ============================================================
+%  CONTRIBUTION.TEX  —  Bảng phân công nhóm
+%  Chỉnh sửa: thêm/bớt hàng trong bảng
+% ============================================================
+
+\newpage
+\thispagestyle{empty}
+
+\begin{center}
+
+  % -- Group info
+  \textcolor{colorText}{\large\bfseries
+    \iflanguage{vietnamese}{BẢNG PHÂN CÔNG NHIỆM VỤ}{CONTRIBUTION TABLE}
+  }
+
+  \vspace{0.5cm}
+
+  \textcolor{colorText}{\normalsize
+    \iflanguage{vietnamese}{Nhóm}{Group}: \textbf{\docGroup} \quad
+    \iflanguage{vietnamese}{Lớp}{Class}: \textbf{\docClass} \quad
+    \iflanguage{vietnamese}{Môn}{Course}: \textbf{\docCourse} \quad
+    \iflanguage{vietnamese}{Giảng viên}{Instructor}: \textbf{\docInstructor}
+  }
+
+  \vspace{0.8cm}
+
+  % -- Contribution table
+  \begin{tabularx}{0.95\textwidth}{|
+    >{\centering\arraybackslash}p{0.05\textwidth}|
+    >{\raggedright\arraybackslash}X|
+    >{\centering\arraybackslash}p{0.1\textwidth}|
+    >{\raggedright\arraybackslash}X|
+    >{\centering\arraybackslash}p{0.15\textwidth}|
+  }
+  \hline
+  \textbf{\iflanguage{vietnamese}{STT}{No.}} &
+  \textbf{\iflanguage{vietnamese}{Họ và tên}{Full Name}} &
+  \textbf{\iflanguage{vietnamese}{MSSV}{ID}} &
+  \textbf{\iflanguage{vietnamese}{Nhiệm vụ}{Task}} &
+  \textbf{\iflanguage{vietnamese}{Ký tên}{Signature}} \\
+  \hline
+  1 & Đỗ Anh Khoa & 2452526 & & \\[1.5cm]
+  \hline
+  2 & Nguyễn Thị Thúy Hằng & 2310904 & & \\[1.5cm]
+  \hline
+  \end{tabularx}
+
+\end{center}

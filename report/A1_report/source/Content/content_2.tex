@@ -1,0 +1,60 @@
+\section{Kiến trúc tổng quan}
+Hệ thống gồm bốn thành phần chạy trong hai tiến trình chính, cộng một giao diện chạy trong trình duyệt:
+
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{3.2cm}
+        >{\raggedright\arraybackslash}p{3.0cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Thành phần} & \textbf{Thư mục} & \textbf{Nhiệm vụ} \\
+        \midrule
+
+        Server core
+        & \texttt{server/}
+        & Nhận kết nối TCP/TLS, xác thực, quản lý phiên, định tuyến chat, cấp phiên file \\
+
+        UDP relay và module truyền file
+        & \texttt{p1/}, \texttt{shared/}
+        & Chuyển tiếp gói UDP theo phiên, truyền file tin cậy; relay chạy cùng tiến trình với server \\
+
+        Bridge
+        & \texttt{bridge.py}, \texttt{bridge\_files.py}
+        & Phục vụ trang Web qua HTTPS, nối trình duyệt với server và relay, giữ khóa phiên \\
+
+        Giao diện Web
+        & \texttt{web/}
+        & Hiển thị chat, người dùng online, thẻ file và tiến trình \\
+
+        Bảo mật
+        & \texttt{security/}
+        & Sinh chứng thư thử, TLS, AES-GCM, quản lý nonce và chống replay \\
+
+        \bottomrule
+
+    \end{tabularx}
+    \caption{Các thành phần chính của hệ thống và chức năng}
+\end{table}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Assets/connect_architecture_overview.png}
+    \caption{Kiến trúc tổng quan của hệ thống Connect}
+\end{figure}
+
+
+
+Trình duyệt gửi yêu cầu tới bridge qua HTTPS. Bridge duy trì kết nối TCP/TLS tới server cho từng phiên đăng nhập, server xác thực, giải mã tin, rời định tuyến và mã hóa lại cho người nhận. Tin đến người nhận đi ngược lại qua bridge của họ tới trình duyệt.
+
+Bridge nhận file từ trình duyệt và giao cho một worker dùng \texttt{FileClient} gửi qua UDP relay. Trước đó, server core cấp ticket cho phiên (yêu cầu \texttt{FILE\_SESSION}) và thu hồi ticket khi người dùng ngắt kết nối. Relay chuyển tiếp gói UDP đã mã hóa tới worker của người nhận, không lưu nội dung file.
+
+Trình duyệt không bao giờ giữ khóa phiên hay ticket, chúng chỉ nằm ở bridge. Kiến trúc tách riêng xử lý mạng, xử lý dữ liệu và giao diện, đúng yêu cầu của đề. Việc truyền file qua relay thay vì giữa hai client với nhau được giải thích ở mục 3.1.

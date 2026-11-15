@@ -1,0 +1,54 @@
+%% ============================================================
+%% FILE: base.tex
+%% DESC: Encoding, page layout, color palette, hyperref
+%% ============================================================
+
+%% --- Encoding ---
+
+\usepackage[utf8]{inputenc}             % UTF-8 input encoding
+
+%% --- Core Packages ---
+
+\usepackage{graphicx}                   % include images: \includegraphics
+\usepackage{booktabs}                   % professional tables: \toprule, \midrule, \bottomrule
+\usepackage{tabularx}                   % auto-width table: \begin{tabularx}{\textwidth}{X}
+\usepackage{xltabular}
+\usepackage{float}                      % force float position: [H]
+\usepackage{amsmath}                    % math environments: align, equation, etc.
+\usepackage{tikz}                       % vector drawing
+\usetikzlibrary{
+    arrows.meta, positioning, fit, backgrounds, calc
+}                   % coordinate arithmetic: ($(A)+(B)$)
+
+%% --- Layout Packages ---
+
+\usepackage[dvipsnames]{xcolor}         % extended color names + \definecolor
+\usepackage{geometry}                   % page margin control
+\usepackage[unicode]{hyperref}          % clickable links and PDF metadata; load last
+
+%% --- Color Palette ---
+
+% NOTE: colorPrimary is darkened from #5c7c9d — original was too bright on print
+\definecolor{colorPrimary}{HTML}{3d6080}    % slate blue — headings, rules, accents
+\definecolor{colorSecondary}{HTML}{7293b5}  % lighter blue — secondary accents
+\definecolor{colorBg}{HTML}{f2f5f7}         % near-white — code background
+\definecolor{colorText}{HTML}{0d0d1a}       % near-black — body text
+\definecolor{colorTextSoft}{HTML}{2a2a3e}   % slightly lighter — captions, labels
+
+% Hyperref colors (derived from palette above)
+\definecolor{colorLink}{HTML}{1e4d73}       % internal links
+\definecolor{colorUrl}{HTML}{2a6a94}        % external URLs
+\definecolor{colorCite}{HTML}{3d6080}       % citation links
+
+%% --- Hyperref ---
+
+\hypersetup{
+    colorlinks        = true,
+    linkcolor         = colorLink,
+    urlcolor          = colorUrl,
+    citecolor         = colorCite,
+    filecolor         = colorPrimary,
+    bookmarksnumbered = true,
+    pdfstartview      = FitH,
+    unicode           = true,
+}
