@@ -1,1 +1,1050 @@
-\section{Thông lượng và băng thông ISP}
+\section{Thiết kế kiến trúc mạng}
+
+\subsection{Cấu trúc mạng phù hợp với kiến trúc tòa nhà}
+Trụ sở chính gồm hai tòa A và B (mỗi tòa 5 tầng) và khu hạ tầng trung tâm (data center, phòng IT, phòng cáp trung tâm) đặt cách hai tòa khoảng 50 m. Nhóm lựa chọn mô hình phân tầng ba lớp (three-tier hierarchical) gồm lớp truy cập, lớp phân phối và lớp lõi, mỗi lớp đảm nhận một chức năng riêng, phù hợp với việc hai tòa nhà tách biệt khỏi khu hạ tầng trung tâm:
+\begin{itemize}
+    \item \textbf{Lớp truy cập (access layer)}: mỗi tầng đặt một access switch tại tủ cáp tầng, kết nối máy trạm, camera và các thiết bị đầu cuối của tầng đó (tổng cộng 10 access switch).
+    \item \textbf{Lớp phân phối (distribution layer)}: mỗi tòa có distribution switch tổng hợp lưu lượng từ các tầng; tòa B dùng hai distribution switch dự phòng cho khoa cấp cứu và ICU.
+    \item \textbf{Lớp lõi (core layer)}: 2 core switch đặt tại khu hạ tầng trung tâm, kết nối hai tòa với server farm, DMZ, firewall.
+\end{itemize}
+
+Tại hai cơ sở phụ (ĐBP và BHTQ), do tòa nhà chỉ có hai tầng và quy mô nhỏ hơn, nhóm sử dụng mô hình lõi thu gọn (collapsed core): một switch Layer 3 đảm nhận đồng thời chức năng lớp lõi và lớp phân phối, kết nối trực tiếp với access switch từng tầng, access switch máy chủ và router biên WAN. Cách bố trí này giảm số thiết bị mà vẫn đáp ứng yêu cầu tối thiểu 5 thiết bị mạng của đề. Vì mỗi cơ sở phụ chỉ có một đường leased line về trụ sở chính, việc không dự phòng lớp lõi tại cơ sở phụ không làm tăng thêm điểm lỗi đơn so với thiết kế chung.
+
+\textbf{Tính thuận tiện}: mỗi tầng chỉ có một tủ cáp và một access switch, VLAN được chia theo khoa/phòng ban, mỗi subnet dự phòng 20\% địa chỉ nên việc bổ sung máy trạm hoặc khoa mới không cần thiết kế lại. Việc tách lớp phân phối khỏi lớp lõi cho phép mở rộng thêm tòa mới mà không ảnh hưởng đến lõi. \textbf{Tính thẩm mỹ}: cáp đi trong trục đứng (riser) và máng cáp, thiết bị tập trung trong tủ rack tại phòng cáp, không để lộ dây ở khu vực công cộng. Kết nối giữa các tòa và khu hạ tầng trung tâm dùng cáp quang.
+
+\subsection{Phân vùng mạng và thiết bị}
+Hệ thống được chia thành các vùng (zone) tách biệt, mỗi vùng có chính sách truy cập riêng:
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|p{3.6cm}|p{6.8cm}|p{3cm}|}
+        \hline
+        \textbf{Vùng} & \textbf{Nội dung} & \textbf{Dải địa chỉ} \\ \hline
+        Người dùng nội bộ (LAN) & Máy trạm các khoa/phòng ban, chia VLAN theo khoa & 10.1.x.x (tòa A), 10.2.x.x (tòa B), 10.3.x.x (ĐBP), 10.4.x.x (BHTQ) \\ \hline
+        Server farm & Server ứng dụng, cơ sở dữ liệu, lưu trữ, hạ tầng & 10.5.x.x (VLAN 502--505) \\ \hline
+        DMZ & Server cung cấp dịch vụ ra Internet (dự kiến: email, DNS, web) & 10.5.6.0/28 \\ \hline
+        Quản trị (management) & Quản lý thiết bị mạng & 10.5.10.0/26 \\ \hline
+    \end{tabular}
+    \caption{Các vùng mạng tại trụ sở chính}
+\end{table}
+
+Chính sách truy cập giữa các vùng:
+\begin{itemize}
+    \item Internet được phép truy cập các dịch vụ công khai trong DMZ; không được truy cập trực tiếp vào LAN và server farm.
+    \item DMZ chỉ được truy cập server farm theo các cổng dịch vụ cần thiết.
+    \item Thiết bị của khách hàng (WiFi) chỉ được ra Internet, bị chặn truy cập vào LAN.
+    \item Cặp firewall đặt giữa Internet và các vùng bên trong; hai edge router kết nối Dual DSL có cân bằng tải (load balancing).
+\end{itemize}
+
+
+\subsection{Danh sách thiết bị và thông số}
+
+\subsubsection{Thiết bị tại trụ sở chính}
+\begin{itemize}
+    \item \textbf{Edge router}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối Dual DSL ra Internet, kết nối WAN đến cơ sở phụ, cân bằng tải (load balancing).
+        \item \textbf{Thông số điển hình:} Định tuyến OSPF, $\geq$ 2 cổng WAN GE, hỗ trợ NAT, nguồn dự phòng.
+    \end{itemize}
+
+    \item \textbf{Firewall}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Bảo vệ ranh giới Internet, chạy cặp dự phòng (HA).
+        \item \textbf{Thông số điển hình:} Stateful firewall, ACL, VPN site-to-site và remote access, $\geq$ 4 cổng GE/10GE, HA active/standby.
+    \end{itemize}
+
+    \item \textbf{Core switch}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Chuyển mạch lõi, kết nối distribution, server farm, DMZ, firewall.
+        \item \textbf{Thông số điển hình:} Layer 3, $\geq$ 24 cổng 10GbE SFP+, $\geq$ 2 cổng 40GbE, OSPF, nguồn dự phòng.
+    \end{itemize}
+
+    \item \textbf{Distribution switch}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Tổng hợp lưu lượng các tầng của tòa A (1) và tòa B (2).
+        \item \textbf{Thông số điển hình:} Layer 3, $\geq$ 12 cổng 10GbE SFP+, hỗ trợ link aggregation (LACP).
+    \end{itemize}
+
+    \item \textbf{Access switch}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối máy trạm, AP, camera mỗi tầng (1 nhóm/tầng).
+        \item \textbf{Thông số điển hình:} 1GbE PoE+, 4 cổng uplink 10GbE, VLAN, port security.
+    \end{itemize}
+
+    \item \textbf{Switch DMZ}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối server vùng DMZ.
+        \item \textbf{Thông số điển hình:} Layer 2, $\geq$ 24 cổng GE.
+    \end{itemize}
+
+    \item \textbf{Switch server farm}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối server nội bộ.
+        \item \textbf{Thông số điển hình:} Layer 2/3, $\geq$ 24 cổng 1/10GbE.
+    \end{itemize}
+
+    \item \textbf{Server}
+    \begin{itemize}
+        \item \textbf{Vai trò:} HIS, LIS, RIS, CSDL, lưu trữ, hạ tầng, DMZ.
+        \item \textbf{Thông số điển hình:} NIC $\geq$ 2 cổng GE/10GE, nguồn dự phòng.
+    \end{itemize}
+
+    \item \textbf{Camera giám sát}
+    \begin{itemize}
+        \item \textbf{Vai trò:} 2 camera mỗi tầng.
+        \item \textbf{Thông số điển hình:} IP camera PoE, độ phân giải Full HD.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Thiết bị tại 2 cơ sở phụ}
+\begin{itemize}
+    \item \textbf{Router biên (WAN)}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối leased line về trụ sở chính.
+        \item \textbf{Thông số điển hình:} Định tuyến OSPF, $\geq$ 2 cổng GE, hỗ trợ WAN.
+    \end{itemize}
+
+    \item \textbf{Switch collapsed core (Layer 3)}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Gộp lõi và phân phối, định tuyến giữa các VLAN, tổng hợp lưu lượng hai tầng.
+        \item \textbf{Thông số điển hình:} Layer 3, $\geq$ 24 cổng GE/10GbE SFP+, OSPF.
+    \end{itemize}
+
+    \item \textbf{Access switch tầng}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối máy trạm, AP, camera tầng 1.
+        \item \textbf{Thông số điển hình:} 1GbE PoE+, 2 cổng uplink 10GbE, VLAN.
+    \end{itemize}
+
+    \item \textbf{Access switch máy chủ}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Kết nối 2 server của cơ sở phụ.
+        \item \textbf{Thông số điển hình:} Layer 2, $\geq$ 8 cổng GE.
+    \end{itemize}
+
+    \item \textbf{Server}
+    \begin{itemize}
+        \item \textbf{Vai trò:} Theo phân bổ của nhóm (xem lưu ý).
+        \item \textbf{Thông số điển hình:} NIC $\geq$ 2 cổng GE, nguồn dự phòng.
+    \end{itemize}
+
+    \item \textbf{Camera giám sát}
+    \begin{itemize}
+        \item \textbf{Vai trò:} 2 camera mỗi tầng.
+        \item \textbf{Thông số điển hình:} IP camera PoE, Full HD.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Kế hoạch địa chỉ IP}
+
+Hệ thống sử dụng dải địa chỉ riêng \texttt{10.x.x.x/8}. Octet thứ hai dùng để phân biệt khối địa chỉ theo cơ sở/tòa nhà:
+\begin{itemize}
+    \item \texttt{10.1.x.x} cho tòa A.
+    \item \texttt{10.2.x.x} cho tòa B.
+    \item \texttt{10.3.x.x} cho chi nhánh ĐBP.
+    \item \texttt{10.4.x.x} cho chi nhánh BHTQ.
+    \item \texttt{10.5.x.x} cho khu hạ tầng trung tâm cùng các VLAN quản lý và camera của trụ sở chính.
+\end{itemize}
+
+VLAN ID gồm ba chữ số theo dạng [tòa/cơ sở][tầng][thứ tự khoa/phòng]: chữ số đầu trùng với octet thứ hai, hai chữ số cuối trùng với octet thứ ba của địa chỉ mạng (ví dụ VLAN 111 ứng với \texttt{10.1.11.0/26}), riêng VLAN camera đặt ở dạng \texttt{x00} và VLAN quản lý thiết bị mạng đặt ở dạng \texttt{x10}.
+
+Mỗi khoa/phòng ban (hoặc nhóm khoa/phòng ban) được gán một VLAN và một mạng con riêng. Độ dài prefix được chọn theo số máy trạm sau khi cộng dự phòng tăng trưởng 20\% (làm tròn lên). Trong mỗi mạng con, địa chỉ \texttt{.1} là default gateway, \texttt{.2} và \texttt{.3} được để dành cho giao thức dự phòng gateway (FHRP), các thiết bị đầu cuối được cấp từ \texttt{.4} trở đi, địa chỉ cuối dùng cho broadcast.
+
+\subsubsection{Trụ sở chính - Tòa A:}
+Các VLAN tại Tòa A được quy hoạch theo từng khu vực chức năng, bao gồm các phòng CTXH và thu viện phí, phòng khám tổng hợp/chuyên môn và khu vực điều dưỡng, nội trú.
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\centering\arraybackslash}p{0.8cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{2.25cm}
+        >{\centering\arraybackslash}p{2.75cm}
+        >{\centering\arraybackslash}p{1.95cm}
+        @{}
+    }
+        \toprule
+        \textbf{ID} &
+        \textbf{Khoa/Phòng ban} &
+        \textbf{IP range} &
+        \textbf{Subnet mask} &
+        \textbf{Gateway} \\
+        \midrule
+        111 & Phòng Công tác xã hội
+            & \texttt{10.1.11.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.1.11.1} \\
+
+        112 & Phòng Thu viện phí + Phòng Giám định BHYT
+            & \texttt{10.1.12.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.1.12.1} \\
+
+        113 & Phòng Khám bệnh theo yêu cầu
+            & \texttt{10.1.13.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.1.13.1} \\
+
+        120 & Phòng Khám bệnh
+            & \texttt{10.1.20.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.1.20.1} \\
+
+        130 & Khoa Tổng hợp
+            & \texttt{10.1.30.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.1.30.1} \\
+
+        140 & Khoa Điều dưỡng và Khoa Nội trú
+            & \texttt{10.1.40.0/24}
+            & \texttt{255.255.255.0}
+            & \texttt{10.1.40.1} \\
+
+        150 & Nhóm khoa đặc thù/chuyên sâu
+            & \texttt{10.1.50.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.1.50.1} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Danh sách VLAN của tòa A}
+\end{table}
+
+
+
+\subsubsection{Trụ sở chính - Tòa B:}
+Các VLAN tại Tòa A được quy hoạch theo từng khu vực chức năng, bao gồm các Khoa Cấp cứu và ICU, các khoa tổng hợp và xét nghiệm/chẩn đoán, các phòng ban chức năng hành chính.
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\centering\arraybackslash}p{0.8cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{2.25cm}
+        >{\centering\arraybackslash}p{2.75cm}
+        >{\centering\arraybackslash}p{1.95cm}
+        @{}
+    }
+        \toprule
+        \textbf{ID} &
+        \textbf{Khoa/Phòng ban} &
+        \textbf{IP range} &
+        \textbf{Subnet mask} &
+        \textbf{Gateway} \\
+        \midrule
+        210 & Khoa Cấp cứu
+            & \texttt{10.2.10.0/25}
+            & \texttt{255.255.255.128}
+            & \texttt{10.2.10.1} \\
+
+        221 & Khoa Hồi sức tích cực
+            & \texttt{10.2.21.0/25}
+            & \texttt{255.255.255.128}
+            & \texttt{10.2.21.1} \\
+
+        222 & Khoa Phẫu thuật - Gây mê hồi sức
+            & \texttt{10.2.22.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.2.22.1} \\
+
+        231 & Khoa Chẩn đoán hình ảnh
+            & \texttt{10.2.31.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.2.31.1} \\
+
+        232 & Khoa Thăm dò chức năng
+            & \texttt{10.2.32.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.2.32.1} \\
+
+        241 & Khoa Xét nghiệm
+            & \texttt{10.2.41.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.2.41.1} \\
+
+        242 & Khoa Dinh dưỡng
+            & \texttt{10.2.42.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.2.42.1} \\
+
+        251 & Phòng Chỉ đạo tuyến
+            & \texttt{10.2.51.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.2.51.1} \\
+
+        252 & Phòng Vật tư - Trang thiết bị
+            & \texttt{10.2.52.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.2.52.1} \\
+
+        253 & Khoa Dược
+            & \texttt{10.2.53.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.2.53.1} \\
+
+        254 & Khoa Kiểm soát nhiễm khuẩn
+            & \texttt{10.2.54.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.2.54.1} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Danh sách VLAN của tòa B}
+\end{table}
+
+\subsubsection{Khu hạ tầng trung tâm:}
+Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm (central cabling local) và VLAN dùng chung của trụ sở.
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\centering\arraybackslash}p{0.8cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{2.25cm}
+        >{\centering\arraybackslash}p{2.75cm}
+        >{\centering\arraybackslash}p{1.95cm}
+        @{}
+    }
+        \toprule
+        \textbf{ID} &
+        \textbf{Khoa/Phòng ban} &
+        \textbf{IP range} &
+        \textbf{Subnet mask} &
+        \textbf{Gateway} \\
+        \midrule
+        500 & Camera giám sát trụ sở chính
+            & \texttt{10.5.0.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.5.0.1} \\
+
+        501 & Phòng Công nghệ thông tin Trung tâm
+            & \texttt{10.5.1.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.5.1.1} \\
+
+        502 & Server Ứng dụng
+            & \texttt{10.5.2.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.5.2.1} \\
+
+        503 & Server Cơ sở dữ liệu
+            & \texttt{10.5.3.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.5.3.1} \\
+
+        504 & Server Lưu trữ
+            & \texttt{10.5.4.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.5.4.1} \\
+
+        505 & Server Hạ tầng
+            & \texttt{10.5.5.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.5.5.1} \\
+
+        506 & Vùng DMZ (Demilitarized Zone)
+            & \texttt{10.5.6.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.5.6.1} \\
+
+        510 & Quản lý thiết bị mạng trụ sở chính
+            & \texttt{10.5.10.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.5.10.1} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{VLAN của khu hạ tầng trung tâm và các VLAN dùng chung của trụ sở chính}
+\end{table}
+
+\subsubsection{Cơ sở ĐBP:}
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\centering\arraybackslash}p{0.8cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{2.25cm}
+        >{\centering\arraybackslash}p{2.75cm}
+        >{\centering\arraybackslash}p{1.95cm}
+        @{}
+    }
+        \toprule
+        \textbf{ID} &
+        \textbf{Khoa/Phòng ban} &
+        \textbf{IP range} &
+        \textbf{Subnet mask} &
+        \textbf{Gateway} \\
+        \midrule
+        300 & Camera giám sát DBP
+            & \texttt{10.3.0.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.3.0.1} \\
+
+        310 & Quản lý thiết bị mạng
+            & \texttt{10.3.10.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.3.10.1} \\
+
+        311 & Phòng Công nghệ thông tin
+            & \texttt{10.3.11.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.3.11.1} \\
+
+        312 & Phòng Máy chủ
+            & \texttt{10.3.12.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.3.12.1} \\
+
+        313 & Phòng Công tác xã hội
+            & \texttt{10.3.13.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.3.13.1} \\
+
+        314 & Thu viện phí
+            & \texttt{10.3.14.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.3.14.1} \\
+
+        315 & Phòng Dược cấp phát
+            & \texttt{10.3.15.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.3.15.1} \\
+
+        316 & Phòng Tổng đài đặt lịch khám
+            & \texttt{10.3.16.0/25}
+            & \texttt{255.255.255.128}
+            & \texttt{10.3.16.1} \\
+
+        321 & Nhóm các Phòng khám
+            & \texttt{10.3.21.0/25}
+            & \texttt{255.255.255.128}
+            & \texttt{10.3.21.1} \\
+
+        322 & Phòng Xét nghiệm
+            & \texttt{10.3.22.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.3.22.1} \\
+
+        323 & Phòng Chẩn đoán hình ảnh cơ bản
+            & \texttt{10.3.23.0/27}
+            & \texttt{255.255.255.224}
+            & \texttt{10.3.23.1} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Danh sách VLAN của chi nhánh ĐBP}
+\end{table}
+
+\subsubsection{Cơ sở BHTQ:}
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\centering\arraybackslash}p{0.8cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{2.25cm}
+        >{\centering\arraybackslash}p{2.75cm}
+        >{\centering\arraybackslash}p{1.95cm}
+        @{}
+    }
+        \toprule
+        \textbf{ID} &
+        \textbf{Khoa/Phòng ban} &
+        \textbf{IP range} &
+        \textbf{Subnet mask} &
+        \textbf{Gateway} \\
+        \midrule
+        400 & Camera giám sát BHTQ
+            & \texttt{10.4.0.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.4.0.1} \\
+
+        410 & Quản lý thiết bị mạng
+            & \texttt{10.4.10.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.4.10.1} \\
+
+        411 & Phòng Công nghệ thông tin
+            & \texttt{10.4.11.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.4.11.1} \\
+
+        412 & Phòng Máy chủ
+            & \texttt{10.4.12.0/28}
+            & \texttt{255.255.255.240}
+            & \texttt{10.4.12.1} \\
+
+        413 & Phòng Kế hoạch Tài chính
+            & \texttt{10.4.13.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.4.13.1} \\
+
+        414 & Phòng Truyền thông - CSKH
+            & \texttt{10.4.14.0/26}
+            & \texttt{255.255.255.192}
+            & \texttt{10.4.14.1} \\
+
+        420 & Nhóm Phòng ban Hành chính
+            & \texttt{10.4.20.0/24}
+            & \texttt{255.255.255.0}
+            & \texttt{10.4.20.1} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Danh sách VLAN của chi nhánh BHTQ}
+\end{table}
+
+\subsubsection{Cấp phát địa chỉ}
+Địa chỉ IP của các workstation được cấp phát động theo giao thức DHCP. Dịch vụ DHCP được đặt trên máy chủ hạ tầng INFRA\_1 (VLAN 505), INFRA\_2 là bản dự phòng. Địa chỉ IP của các server được cấp phát tĩnh theo Bảng Địa chỉ IP tĩnh của các máy chủ. Địa chỉ của thiết bị mạng (VLAN quản lý) được cấp tĩnh, địa chỉ camera được cấp tĩnh. Giao thức FHRP dùng cho các địa chỉ \texttt{.2} và \texttt{.3} dự phòng.
+
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.2cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{1cm}
+        >{\centering\arraybackslash}p{2.2cm}
+        @{}
+    }
+        \toprule
+        \textbf{Máy chủ} &
+        \textbf{Vai trò} &
+        \textbf{ID} &
+        \textbf{Địa chỉ IP} \\
+        \midrule
+        APP\_1 & HIS (CIS, NIS)
+            & 502 & \texttt{10.5.2.4} \\
+
+        APP\_2 & LIS, RIS
+            & 502 & \texttt{10.5.2.5} \\
+
+        DB\_1 & Cơ sở dữ liệu
+            & 503 & \texttt{10.5.3.4} \\
+
+        DB\_2 & Cơ sở dữ liệu
+            & 503 & \texttt{10.5.3.5} \\
+
+        STO & Lưu trữ dữ liệu: File/backup, PACS archive, NVR
+            & 504 & \texttt{10.5.4.4} \\
+
+        INFRA\_1 & AD/DNS/DHCP
+            & 505 & \texttt{10.5.5.4} \\
+
+        INFRA\_2 & Syslog/monitoring (hoặc DNS/DHCP secondary)
+            & 505 & \texttt{10.5.5.5} \\
+
+        DMZ\_WEB & Website portal
+            & 506 & \texttt{10.5.6.4} \\
+
+        DMZ\_MAIL & Email
+            & 506 & \texttt{10.5.6.5} \\
+
+        DMZ\_DNS & Public DNS
+            & 506 & \texttt{10.5.6.6} \\
+
+        PIS & Pharmacy Information System (DBP)
+            & 312 & \texttt{10.3.12.4} \\
+
+        CRM & Customer Relationship Management (DBP)
+            & 312 & \texttt{10.3.12.5} \\
+
+        FIS & Finance Information System (BHTQ)
+            & 412 & \texttt{10.4.12.4} \\
+
+        DR & Disaster Recovery (BHTQ)
+            & 412 & \texttt{10.4.12.5} \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Địa chỉ IP tĩnh của các máy chủ}
+\end{table}
+
+\subsection{Sơ đồ vật lý}
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        font=\small,
+        dev/.style={
+            draw=blue!60!black,
+            fill=blue!5,
+            rounded corners=2pt,
+            thick,
+            align=center,
+            minimum height=0.75cm,
+            minimum width=2.6cm
+        },
+        server/.style={
+            draw=green!50!black,
+            fill=green!5,
+            rounded corners=2pt,
+            thick,
+            align=center,
+            minimum height=0.75cm,
+            minimum width=2.8cm
+        },
+        access/.style={
+            draw=orange!70!black,
+            fill=orange!8,
+            rounded corners=2pt,
+            thick,
+            align=center,
+            minimum height=0.85cm,
+            minimum width=3.6cm
+        },
+        endpoint/.style={
+            draw=gray!70!black,
+            fill=gray!8,
+            rounded corners=2pt,
+            thick,
+            align=center,
+            minimum height=0.75cm,
+            minimum width=3.6cm
+        },
+        note/.style={
+            font=\footnotesize,
+            align=center,
+            fill=white,
+            inner sep=2pt
+        },
+        link/.style={
+            draw=black!75,
+            line width=0.8pt
+        }
+    ]
+
+    % ==========================================
+    % INTERNET VÀ KẾT NỐI WAN
+    % ==========================================
+
+    \node[dev] (internet) at (-0.8,10.2) {Internet};
+
+    \node[dev] (router1) at (-2.7,8.5) {Edge Router 1};
+    \node[dev] (router2) at (1.1,8.5) {Edge Router 2};
+
+    \node[server] (branches) at (6.2,8.5)
+        {Cở sở\\ĐBP và BHTQ};
+
+    \node[note] at (3.5,10.2) {Cân bằng tải};
+
+    % ==========================================
+    % FIREWALL
+    % ==========================================
+
+    \node[dev] (fw1) at (-2.7,6.6) {Firewall 1};
+    \node[dev] (fw2) at (1.1,6.6) {Firewall 2};
+
+    % ==========================================
+    % CORE SWITCH
+    % ==========================================
+
+    % Core Switch
+    \node[dev] (core1) at (-2.7,4.8) {Core Switch 1};
+    \node[dev] (core2) at (1.1,4.8) {Core Switch 2};
+    \coordinate (coretap)
+    at ($(core1.east)!0.5!(core2.west)$);
+    
+
+    % DMZ
+    \node[dev] (dmzsw) at (4.8,5.55) {Switch DMZ};
+
+    \node[server] (dmzserver) at (8.1,5.55)
+        {Server DMZ\\Email, DNS, Web};
+
+    % Server Farm
+    \node[dev, minimum width=2.9cm] (farmsw) at (4.8,4.0)
+        {Switch Server Farm};
+
+    \node[server] (farmserver) at (8.1,4.0)
+        {Server nội bộ};
+
+    % ==========================================
+    % DMZ VÀ SERVER FARM
+    % ==========================================
+
+    % Đường kết nối từ Core Switch 2 đến nhánh dịch vụ
+    \draw[link] (core2.east) -- (3.25,4.8);
+
+    % DMZ
+    \node[dev] (dmzsw) at (4.8,5.55)
+        {Switch DMZ};
+
+    \node[server] (dmzserver) at (8.1,5.55)
+        {Server DMZ\\Email, DNS, Web};
+
+    % Server Farm
+    \node[dev, minimum width=2.9cm] (farmsw) at (4.8,4.0)
+        {Switch Server Farm};
+
+    \node[server] (farmserver) at (8.1,4.0)
+        {Server nội bộ};
+
+    % ==========================================
+    % BACKBONE QUANG
+    % ==========================================
+
+    % Đường backbone quang giữa core và các tòa
+    \coordinate (fiberleft) at (-6.0,2.2);
+    \coordinate (fiberright) at (5.5,2.2);
+
+    % ==========================================
+    % DISTRIBUTION SWITCH
+    % ==========================================
+
+    \node[dev] (distA) at (-4.8,0.9)
+        {Distribution A};
+
+    \node[dev] (distB1) at (-0.5,0.9)
+        {Distribution B1};
+
+    \node[dev] (distB2) at (4.2,0.9)
+        {Distribution B2};
+
+    % ==========================================
+    % ACCESS SWITCH
+    % ==========================================
+
+    \node[access] (accessA) at (-4.8,-0.55)
+        {Access A1--A5};
+
+    \node[access] (accessB) at (1.85,-0.55)
+        {Access B1--B5\\
+        \footnotesize Mỗi switch kết nối cả B1 và B2};
+
+    % ==========================================
+    % THIẾT BỊ ĐẦU CUỐI
+    % ==========================================
+
+    \node[endpoint] (endA) at (-4.8,-2.05)
+        {PC / AP / Camera};
+
+    \node[endpoint] (endB) at (1.85,-2.05)
+        {PC / AP / Camera};
+
+    % ==========================================
+    % KẾT NỐI INTERNET - ROUTER
+    % ==========================================
+
+    \draw[link]
+        (internet.south) --
+        node[pos=0.55, sloped, above, note] {DSL 1}
+        (router1.north);
+
+    \draw[link]
+        (internet.south) --
+        node[pos=0.55, sloped, above, note] {DSL 2}
+        (router2.north);
+
+    % Router 2 đến các cơ sở
+    \draw[link]
+        (router2.east) --
+        node[midway, above, note] {Leased line}
+        (branches.west);
+
+    % ==========================================
+    % ROUTER - FIREWALL
+    % ==========================================
+
+    \draw[link] (router1.south) -- (fw1.north);
+    \draw[link] (router2.south) -- (fw2.north);
+
+    % ==========================================
+    % FIREWALL HA
+    % ==========================================
+
+    \draw[link]
+        (fw1.east) --
+        node[midway, above, note] {HA}
+        (fw2.west);
+
+    % ==========================================
+    % FIREWALL - CORE
+    % ==========================================
+
+    \draw[link] (fw1.south) -- (core1.north);
+    \draw[link] (fw2.south) -- (core2.north);
+
+    % ==========================================
+    % CORE SWITCH TRUNK
+    % ==========================================
+
+    \draw[link]
+        (core1.east) --
+        node[midway, above, note] {Trunk 10GbE}
+        (core2.west);
+
+    % Kết nối từ cặp Core đến DMZ và Server Farm
+    \draw[link]
+        (coretap) -- (3.05,4.8);
+
+    \draw[link]
+        (3.05,4.8) -- (3.05,5.55) --
+        (dmzsw.west);
+
+    \draw[link]
+        (3.05,4.8) -- (3.05,4.0) --
+        (farmsw.west);
+
+    \draw[link]
+        (dmzsw.east) -- (dmzserver.west);
+
+    \draw[link]
+        (farmsw.east) -- (farmserver.west);
+
+    % ==========================================
+    % CORE - BACKBONE QUANG - DISTRIBUTION
+    % ==========================================
+
+    % Kết nối từ Core xuống backbone
+    \draw[link]
+        (core1.south) -- (-2.7,2.2);
+
+    \draw[link]
+        (core2.south) -- (1.1,2.2);
+
+    % Backbone quang 10GbE
+    \draw[link] (fiberleft) -- (fiberright);
+
+    \node[note] at (-0.25,2.42)
+        {Cáp quang 10GbE (~50 m) tới các tòa};
+
+    % Kết nối backbone đến Distribution
+    \draw[link] (-4.8,2.2) -- (distA.north);
+    \draw[link] (-0.5,2.2) -- (distB1.north);
+    \draw[link] (4.2,2.2) -- (distB2.north);
+
+    % ==========================================
+    % DISTRIBUTION - ACCESS
+    % ==========================================
+
+    % Tòa A
+    \draw[link]
+        (distA.south) -- (accessA.north);
+
+    % Tòa B: hai đường uplink dự phòng
+    \draw[link]
+        (distB1.south) -- ++(0,-0.35)
+        -| ([xshift=-1.2cm]accessB.north);
+
+    \draw[link]
+        (distB2.south) -- ++(0,-0.35)
+        -| ([xshift=1.2cm]accessB.north);
+
+    % ==========================================
+    % ACCESS - THIẾT BỊ ĐẦU CUỐI
+    % ==========================================
+
+    \draw[link]
+        (accessA.south) --
+        node[midway, right, note] {UTP Cat6}
+        (endA.north);
+
+    \draw[link]
+        (accessB.south) --
+        node[midway, right, note] {UTP Cat6}
+        (endB.north);
+
+    \end{tikzpicture}%
+    }
+    \caption{Sơ đồ kiến trúc mạng tại trụ sở chính và các tòa nhà}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        device/.style={
+            draw=black!70,
+            rounded corners=3pt,
+            line width=0.8pt,
+            fill=blue!5,
+            minimum height=1.1cm,
+            minimum width=3.4cm,
+            align=center,
+            font=\small
+        },
+        core/.style={
+            device,
+            fill=orange!12,
+            minimum width=4.8cm,
+            minimum height=1.2cm
+        },
+        access/.style={
+            device,
+            fill=green!7,
+            minimum width=3.7cm,
+            minimum height=1.3cm
+        },
+        link/.style={
+            draw=black!75,
+            line width=0.9pt
+        }
+    ]
+
+    % Các thiết bị ở lớp trên
+    \node[device] (hq) at (0.7,0)
+        {\textbf{Trụ sở chính}};
+
+    \node[device] (wan) at (6.7,0)
+        {\textbf{Router biên WAN}};
+
+    % Kết nối leased line
+    \draw[link]
+        (hq.east) --
+        node[midway, above=4pt, fill=white, inner sep=2pt]
+        {Leased line (OSPF)}
+        (wan.west);
+
+    % Collapsed Core
+    \node[core] (core) at (6.7,-2.2)
+        {\textbf{Switch Collapsed Core}\\Layer 3};
+
+    \draw[link] (wan.south) -- (core.north);
+
+    % Ba Access Switch
+    \node[access] (acc1) at (0.7,-5)
+        {\textbf{Access tầng 1}\\PC / AP / camera};
+
+    \node[access] (acc2) at (6.7,-5)
+        {\textbf{Access tầng 2}\\PC / AP / camera};
+
+    \node[access] (acc3) at (12.7,-5)
+        {\textbf{Access máy chủ}\\2 server};
+
+    % Đường phân nhánh từ Core đến các Access
+    \coordinate (branchY) at ($(core.south)+(0,-0.7)$);
+
+    \draw[link] (core.south) -- (branchY);
+
+    \draw[link]
+        (acc1.north |- branchY) --
+        (acc3.north |- branchY);
+
+    \foreach \n in {acc1,acc2,acc3} {
+        \draw[link]
+            (\n.north |- branchY) -- (\n.north);
+    }
+
+    \end{tikzpicture}%
+    }
+    \caption{Sơ đồ kết nối mạng tại cơ sở ĐBP và BHTQ}
+\end{figure}
+
+
+\subsection{Kết nối WAN}
+Trụ sở chính kết nối với hai cơ sở ĐBP và BHTQ bằng các kênh truyền riêng (leased line). Mỗi cơ sở phụ có một router biên WAN kết nối về edge router của trụ sở chính; toàn bộ lưu lượng truy cập Internet của cơ sở phụ đi qua trụ sở chính, nơi có kết nối Dual DSL kèm cân bằng tải (load balancing). Định tuyến giữa ba cơ sở sử dụng giao thức OSPF.
+
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[
+        device/.style={
+            draw=black!70,
+            rounded corners=3pt,
+            line width=0.8pt,
+            fill=blue!5,
+            minimum height=1.1cm,
+            minimum width=3.8cm,
+            align=center,
+            font=\small
+        },
+        router/.style={
+            device,
+            fill=green!8,
+            minimum width=3.8cm
+        },
+        hq/.style={
+            device,
+            fill=orange!12,
+            minimum width=6.5cm,
+            minimum height=1.4cm
+        },
+        internet/.style={
+            device,
+            fill=cyan!10,
+            minimum width=4.8cm,
+            minimum height=1.3cm
+        },
+        link/.style={
+            draw=black!75,
+            line width=0.9pt,
+            -{Latex[length=2mm]}
+        }
+    ]
+
+    % Hai cơ sở phụ
+    \node[device] (dbp) at (-5.5,0)
+        {\textbf{Cơ sở ĐBP}};
+
+    \node[device] (bhtq) at (5.5,0)
+        {\textbf{Cơ sở BHTQ}};
+
+    % Router biên WAN tại mỗi cơ sở phụ
+    \node[router] (rdbp) at (-5.5,-1.8)
+        {\textbf{Router biên WAN}};
+
+    \node[router] (rbhtq) at (5.5,-1.8)
+        {\textbf{Router biên WAN}};
+
+    % Kết nối nội bộ tại cơ sở
+    \draw (dbp.south) -- (rdbp.north);
+    \draw (bhtq.south) -- (rbhtq.north);
+
+    % Cụm Edge Router tại trụ sở chính
+    \node[hq] (hq) at (0,-4.5)
+        {\textbf{Trụ sở chính}\\
+         Edge Router 1 \quad | \quad Edge Router 2};
+
+    % Leased line từ hai cơ sở về trụ sở chính
+    \draw[link]
+        (rdbp.south) --
+        node[pos=0.48, above, sloped,
+             fill=white, inner sep=2pt]
+        {Leased line}
+        (hq.north west);
+
+    \draw[link]
+        (rbhtq.south) --
+        node[pos=0.48, above, sloped,
+             fill=white, inner sep=2pt]
+        {Leased line}
+        (hq.north east);
+
+    % Kết nối Internet
+    \node[internet] (inet) at (0,-7)
+        {\textbf{Internet}\\
+         Dual DSL -- Load Balancing};
+
+    \draw[link]
+        (hq.south) -- (inet.north);
+
+    \end{tikzpicture}%
+    }
+    \caption{Sơ đồ kết nối WAN giữa trụ sở chính và các cơ sở ĐBP và BHTQ}
+\end{figure}
+
+
+
+
+
+
+
+
+
+
+
+

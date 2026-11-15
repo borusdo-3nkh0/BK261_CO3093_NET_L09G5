@@ -1,1 +1,50 @@
-\section{Triển khai hệ thống mạng}
+\section{Thông lượng và băng thông ISP}
+
+\subsection{Giả định và phương pháp}
+\begin{itemize}
+    \item Đơn vị lưu lượng của đề là MB/ngày; quy đổi 1 MB = 8 Mb.
+    \item 80\% lưu lượng trong ngày tập trung vào hai khoảng cao điểm 9:00--11:00 và 15:00--16:00, tổng cộng 3 giờ.
+    \item Thiết bị WiFi của khách chỉ có ở trụ sở chính (đề yêu cầu phủ sóng cho trụ sở chính); nhóm giả định 400 thiết bị kết nối.
+    \item Để an toàn, toàn bộ lưu lượng của máy trạm, máy chủ và khách đều được tính vào đường truyền (trường hợp xấu nhất), dù thực tế một phần lưu lượng chỉ đi trong mạng nội bộ.
+    \item Mức tăng trưởng 20\% trong 5 năm được nhân vào kết quả cuối.
+\end{itemize}
+
+Băng thông cao điểm của lượng dữ liệu $V$ (MB/ngày):
+\[
+    T = \frac{V \times 0{,}8 \times 8}{3 \times 3600} \text{ (Mbps)}
+\]
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{lcccc}
+        \hline
+        \textbf{Thiết bị} & \textbf{Xuống (MB/ngày)} & \textbf{Lên (MB/ngày)} & \textbf{Xuống (Mbps)} & \textbf{Lên (Mbps)} \\ \hline
+        Máy trạm & 500 & 100 & 0,296 & 0,059 \\ \hline
+        Máy chủ & 1000 & 2000 & 0,593 & 1,185 \\ \hline
+        Thiết bị khách (WiFi) & 500 & --- & 0,296 & --- \\ \hline
+    \end{tabular}
+    \caption{Băng thông cao điểm của từng loại thiết bị}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{p{5.6cm}cccc}
+        \hline
+        \textbf{Cơ sở} & \textbf{Xuống} & \textbf{Lên} & \textbf{Xuống +20\%} & \textbf{Lên +20\%} \\ \hline
+        Trụ sở chính (600 máy trạm, 10 máy chủ) & 183,7 & 47,4 & 220,4 & 56,9 \\ \hline
+        Khách WiFi (400 thiết bị) & 118,5 & --- & 142,2 & --- \\ \hline
+        Mỗi cơ sở phụ (260 máy trạm, 2 máy chủ) & 78,2 & 17,8 & 93,9 & 21,3 \\ \hline
+        \textbf{Tổng ra Internet (cả 3 cơ sở)} & \textbf{458,7} & \textbf{83,0} & \textbf{550,4} & \textbf{99,6} \\ \hline
+    \end{tabular}
+    \\[2pt] \small Đơn vị: Mbps.
+    \caption{Băng thông cao điểm theo cơ sở}
+\end{table}
+
+\subsection{Đề xuất cấu hình}
+\begin{itemize}
+    \item \textbf{Đường Internet (ISP)}: nhu cầu 550,4 Mbps xuống và 99,6 Mbps lên. Nhóm đề xuất hai đường, mỗi đường tối thiểu 500 Mbps xuống và 100 Mbps lên, chạy cân bằng tải (load balancing). Khi một đường hỏng, đường còn lại vẫn đáp ứng khoảng 91\% nhu cầu.
+    \item \textbf{Kênh truyền riêng (leased line) mỗi cơ sở phụ}: nhu cầu 93,9 Mbps; chọn kênh 200 Mbps để có dư địa khoảng 2 lần.
+    \item \textbf{Mạng LAN trụ sở chính}: tầng nặng nhất (A4, 158 máy trạm) cần khoảng 56,2 Mbps xuống, chiếm chưa đến 6\% cổng 1GbE; toàn bộ trụ sở sau tăng trưởng khoảng 362,7 Mbps (gồm cả khách), chưa đến 4\% một đường 10GbE. Cổng 1GbE ở lớp truy cập và 10GbE ở lớp phân phối, lõi là đủ.
+\end{itemize}
