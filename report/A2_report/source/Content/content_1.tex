@@ -1,104 +1,29 @@
-\section{Phân tích yêu cầu hệ thống mạng}
-Công ty Tư vấn Máy tính \& Xây dựng (CCC) được yêu cầu thiết kế một mạng lưới máy tính triển khai ở trụ sở chính (TP. Hồ Chí Mình) và 2 chi nhánh (đường Điện Biên Phủ và đường Bà Huyện Thanh Quan) cho một bệnh viện được xây dựng.
+\section{Giới thiệu}
 
-\subsection{Tổng quan các cơ sở triển khai}
-\subsubsection{Trụ sở chính}
-Quy mô của trụ sở chính:
+\subsection{Bối cảnh và mục tiêu}
+Bệnh viện hiện đại phụ thuộc vào hệ thống thông tin vận hành liên tục: quản lý khám chữa bệnh (HIS), xét nghiệm (LIS), chẩn đoán hình ảnh (RIS-PACS), tài chính (FIS), dược (PIS). Một hệ thống mạng thiếu ổn định có thể làm gián đoạn quy trình cấp cứu hoặc làm chậm việc truy xuất dữ liệu bệnh nhân. Báo cáo này trình bày thiết kế hệ thống mạng cho một bệnh viện gồm một trụ sở chính (main site) và 2 cơ sở phụ (auxiliary sites) ở đường ĐBP và BHTQ, với mục tiêu:
 \begin{itemize}
-    \item 2 tòa nhà A và B, mỗi tòa 5 tầng, mỗi tầng 10 phòng.
-    \item 600 máy trạm (workstation).
-    \item 10 máy chủ (server).
-    \item Tối thiểu 12 thiết bị mạng, chưa bao gồm các thiết bị bảo mật đặc thù.
+    \item Đáp ứng nhu cầu kết nối của từng khoa/phòng ban, tách biệt về mặt logic bằng VLAN và subnet riêng.
+    \item Bảo đảm các tiêu chí phi chức năng (non-functional requirements): Độ tin cậy (reliability), bảo mệt (security), khả năng mở rộng (scalability).
+    \item Kiểm chứng thiết kế bằng mô phỏng dùng Packet Tracer.
 \end{itemize}
 
-Trung tâm dữ liệu (data center), phòng IT, và phòng cáp trung tâm (cabling central local) được bố trí tách biệt, cách khu vực tòa A và B khoảng 50m.
-
-Kết nối không dây phải phủ sóng cho toàn bộ khu vực trụ sở.
-
-\subsubsection{Chi nhánh ĐBP và BHTQ}
-Quy mô cho từng cơ sở:
+\subsection{Phạm vi và giả định}
 \begin{itemize}
-    \item 260 máy trạm (workstation).
-    \item 2 máy chủ (server).
-    \item Tối thiểu 5 thiết bị mạng.
+    \item Đề bài không chỉ định bệnh viện chuyên khoa cụ thể, nên nhóm thiết kế theo mô hình bệnh viện tổng quát/chuyên biệt: các khoa được chia thành các phòng chức năng, khoa lâm sàng, khoa cận lâm sàng và chuyên khoa.
+    \item Chi phí thiết bị thực tế không phải ràng buộc. Trọng tâm là cấu hình hệ thống và chứng minh bằng mô phỏng.
+    \item Kết quả mô phỏng được thực hiện bằng Packet Tracer.
 \end{itemize}
 
-Tòa nhà chi nhánh có 2 tầng, tầng 1 gồm 1 phòng IT và 1 phòng cáp trung tâm.
+\subsection{Tổng quan phương pháp thiết kế}
+Hệ thống áp dụng mô hình phân tầng (hierarchial), trong đó trụ sở chính dùng mô hình 3 tầng (core layer, distribution layer, access layer) và 2 cơ sở ĐBP và BHTQ dùng mô hình 2 tầng (collapsed core layer, access layer). Trong đó mỗi tầng nhà có một access switch, phân VLAN theo khoa/phòng ban, DMZ riêng cho các server công khai, firewall bảo vệ ranh giới mạng. Khoa cấp cứu và hồi sức tích cực (ICU) được thiết kế dự phòng vì tích chất không thể gián đoạn.
 
-\subsection{Phân tích yêu cầu hạ tầng mạng}
-Sử dụng các công nghệ mạng được yêu cầu cho cơ sở hạ tầng mạng:
-\begin{itemize}
-    \item Kết nối có dây và không dây.
-    \item Cáp sợi quang (GPON).
-    \item Giga Ethernet các tốc độ 1GbE, 10GbE hoặc 40GbE.
-    \item VLAN dùng phân chia mạng theo từng Khoa/Phòng ban.
-\end{itemize}
+\subsection{Lưu trữ và công bố mã nguồn dự án}
 
-Kết nối WAN và Internet:
-\begin{itemize}
-    \item Trụ sở chính kết nối với chi nhánh ĐBP và BHTQ bằng 2 kênh truyền riêng (leased line).
-    \item Có thể dùng SD-WAN hoặc MPLS để triển khai kết nối WAN.
-    \item Trụ sở chính dùng kết nối Dual DSL (2xDSL) đến Internet, có cơ chế cân bằng tải (load balancing). Tất cả lưu lượng truy cập vào Internet đều đi qua mạng con trụ sở chính.
-    \item Đề xuất cấu hình VPN kết nối site-to-site và kết nối từ xa (remote access) vào mạng LAN của bệnh viện.
-    \item Đề xuất hệ thống camera giám sát cho công ty.
-\end{itemize}
+Toàn bộ mã nguồn và các tài liệu liên quan đến dự án
+được công khai và lưu trữ tại GitHub nhằm thuận tiện
+cho việc tra cứu, kiểm tra và phát triển trong tương lai.
 
+Kho lưu trữ của dự án:
 
-\subsection{Phân tích yêu cầu ứng dụng và dịch vụ}
-Bệnh viện sử dụng kết hợp các phần mềm được cấp phép và các phần mềm có mã nguồn mở gồm:
-\begin{itemize}
-    \item Các phần mềm hệ thống bệnh viện: HIS, RIS - PACS, LIS, CRM, etc.
-    \item Ứng dụng văn phòng.
-    \item Ứng dụng client-server.
-    \item Ứng dụng đa phương tiện.
-    \item Cơ sở dữ liệu.
-\end{itemize}
-
-
-\subsection{Phân tích yêu cầu phi chức năng}
-Hệ thống cần đáp ứng các yêu cầu phi chức năng như sau:
-\begin{itemize}
-    \item Khả năng mở rộng hệ thống mạng.
-    \item Bảo mật cao: tường lửa, IPS/IDS, phishing detection.
-    \item Tính sẵn sàng cao (HA).
-    \item Khả năng phục hồi khi xảy ra sự cố.
-    \item Khả năng nâng cấp hệ thống.
-\end{itemize}
-
-
-\subsection{Phân tích workload và giờ cao điểm}
-Hệ thống mạng của bệnh viện có khối lượng lưu lượng dữ liệu tập trung chủ yếu vào hai khoảng thời gian cao điểm trong ngày, bao gồm 9:00--11:00 và 15:00--16:00. Ước tính khoảng 80\% workload của hệ thống phát sinh trong các khoảng thời gian này.
-
-Các thông số lưu lượng được cung cấp như sau:
-\begin{itemize}
-    \item Máy chủ (server):
-    \begin{itemize}
-        \item Lưu lượng tải xuống (download): 1000 MB/ngày.
-        \item Lưu lượng tải lên (upload): 2000 MB/ngày.
-    \end{itemize}
-
-    \item Mỗi máy trạm (workstation):
-    \begin{itemize}
-        \item Lưu lượng tải xuống (download): 500 MB/ngày.
-        \item Lưu lượng tải lên (upload): 100 MB/ngày.
-    \end{itemize}
-    
-    \item Thiết bị của khách hàng kết nối với WiFi:
-    \begin{itemize}
-        \item Lưu lượng tải xuống (download): 500 MB/ngày.
-    \end{itemize}
-\end{itemize}
-
-Ngoài ra, hệ thống được dự kiến có mức tăng trưởng khoảng 20\% trong vòng 5 năm. Do đó, thiết kế mạng cần tính đến khả năng mở rộng băng thông, năng lực xử lý của các thiết bị mạng và khả năng đáp ứng lưu lượng gia tăng trong tương lai.
-
-\subsection{Xác định vùng có tải mạng cao}
-Dựa trên quy mô triển khai và các ứng dụng được sử dụng trong bệnh viện, một số khu vực có khả năng phát sinh lưu lượng mạng lớn cần được xem xét:
-
-\begin{itemize}
-    \item \textbf{Trung tâm dữ liệu (data center)}: Nơi tập trung các máy chủ và dịch vụ dùng chung của bệnh viện (HIS, RIS-PACS, LIS và cơ sở dữ liệu). Lưu lượng truy cập và trao đổi dữ liệu giữa máy trạm với máy chủ có thể phát sinh tải mạng đáng kể.
-    \item \textbf{Khu vực chẩn đoán hình ảnh}: Các hệ thống RIS-PACS phục vụ việc lưu trữ, truy xuất và trao đổi hình ảnh y tế. Những dữ liệu này có kích thước lớn, do đó cần xem xét nhu cầu băng thông và tốc độ kết nối tại khu vực này.
-    \item \textbf{Các khoa/phòng ban có mật độ mát trạm cao}: Nhiều máy trạm hoạt động đồng thời và truy cập các hệ thống bệnh viện có thể làm gia tăng lưu lượng mạng cục bộ cũng như lưu lượng đến trung tâm dữ liệu.
-    \item \textbf{Kết nối WiFi từ khách hàng}: Số lượng thiết bị cá nhân kết nối đồng thời có thể tạo ra lưu lượng Internet đáng kể. Cần xem xét mật độ thiết bị và khả năng đáp ứng của hệ thống WiFi.
-\end{itemize}
-
-Các khu vực trên sẽ được ưu tiên xem xét trong quá trình khảo sát, phân bố băng thông và lựa chọn thiết bị mạng nhằm đảm bảo hiệu năng hoạt động của toàn hệ thống.
+\url{https://github.com/borusdo-3nkh0/BK261_CO3093_NET_L09G5}

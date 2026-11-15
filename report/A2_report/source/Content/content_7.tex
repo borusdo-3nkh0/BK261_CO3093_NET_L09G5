@@ -1,0 +1,62 @@
+\section{Kết luận}
+Nhóm đã thiết kế hệ thống mạng cho bệnh viện gồm trụ sở chính và hai cơ sở phụ: mô hình ba lớp ở trụ sở chính, mô hình lõi thu gọn ở cơ sở ĐBP và BHTQ, VLAN chia theo khoa/phòng ban, kết nối Internet Dual DSL cân bằng tải và kênh truyền riêng giữa các cơ sở. Phép tính lưu lượng cho thấy nhu cầu ra Internet vào khoảng 550~Mbps xuống và 100~Mbps lên sau tăng trưởng 20\%, được đáp ứng bởi hai đường 500~Mbps.
+
+\subsection{Tóm tắt thiết kế}
+Hệ thống đã thiết kế mạng cho 3 cơ sở với 44 VLAN, kế hoạch địa chỉ IPv4 dùng dải \texttt{10.0.0.0/8} chia theo khoa/phòng ban kết hợp tòa nhà/cơ sở phụ, mỗi subnet được tính với dự phòng tăng 20\% số máy trạm.
+
+Trụ sở chính áp dụng mô hình ba lớp gồm 10 access switch (mỗi tầng một switch), các distribution switch cho tòa A và tòa B, và 2 core switch đặt tại khu hạ tầng trung tâm; hai cơ sở phụ dùng mô hình lõi thu gọn với một switch Layer 3. Mỗi cơ sở phụ nối về trụ sở chính bằng một kênh truyền riêng 200 Mbps, định tuyến giữa ba cơ sở bằng OSPF.
+
+
+Mạng được chia thành các vùng riêng gồm vùng người dùng nội bộ, server farm, DMZ (email, DNS, web) và vùng quản lý thiết bị, giữa các vùng là cặp firewall dự phòng. Mạng không dây tách thành hai SSID cho nhân viên và khách hàng, trong đó thiết bị của khách chỉ được truy cập Internet.
+
+Về tính sẵn sàng cao, hệ thống có 2 edge router, 2 firewall, 2 core switch, khoa Cấp cứu và ICU được đấu dự phòng vào hai distribution switch của tòa B, server DR đặt tại BHTQ, mỗi subnet chừa sẵn địa chỉ cho giao thức dự phòng gateway.
+
+Kết nối Internet dùng hai đường DSL cân bằng tải, mỗi đường tối thiểu 500 Mbps xuống và 100 Mbps lên. Hệ thống còn được bố trí camera giám sát (2 camera mỗi tầng) với địa chỉ riêng cho từng cơ sở.
+
+\subsection{Đánh giá theo tiêu chí đề bài}
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{4cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Tiêu chí} & \textbf{Đánh giá} \\
+        \midrule
+        \textbf{Reliability}
+        & 2 edge router, 2 firewall, 2 core switch; HA cho cấp cứu và hồi sức tích cực; server DR đặt ở BHTQ \\
+
+        \textbf{Ease of upgrade}
+        & VLAN và subnet theo khoa, dải IP dự phòng 20\%, khối địa chỉ riêng cho từng toà/site \\
+
+        \textbf{Diverse support software}
+        & Hạ tầng server hỗ trợ HIS, LIS, RIS, FIS, PIS; có DMZ cho email, DNS, web \\
+
+        \textbf{Safety}
+        & Phòng IT, data center, phòng cáp trung tâm tách riêng khỏi toà A và toà B \\
+
+        \textbf{Network security}
+        & Phân vùng VLAN, DMZ, firewall; thiết bị khách hàng không truy cập được PC trong LAN \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Đánh giá thiết kế mạng theo các tiêu chí kỹ thuật}
+\end{table}
+
+\subsection{Hạn chế}
+\begin{itemize}
+    \item Khảo sát chỉ ở mức tượng trưng (không khảo sát tại chỗ).
+    \item Số thiết bị mạng ở trụ sở chính (khoảng 21 thiết bị) vượt mức tham chiếu 12 của đề, nhóm chọn ưu tiên đáp ứng HA và phân subnet theo khoa/phòng ban.
+    \item Các thiết bị y tế/IoT chỉ nằm ở mức dự kiến, chưa nằm trong IP plan.
+    \item Mỗi site phụ chỉ có một đường leased line về main site, nên vẫn còn SPOF.
+    \item Kết nối WAN hiện chỉ sử dụng kênh truyền riêng (leased line), chưa triển khai các công nghệ WAN hiện đại như MPLS hoặc SD-WAN do giới hạn thời gian thực hiện. Mỗi cơ sở phụ chỉ có một đường truyền về trụ sở chính nên tồn tại điểm lỗi đơn (single point of failure) ở kết nối WAN.
+    \item Tốc độ đường truyền tính theo trường hợp xấu nhất và giả định số thiết bị khách; thực tế DSL có thể thấp hơn.
+    \item Gateway redundancy (HSRP/VRRP) chỉ mới ở mức chuẩn bị và chưa được triển khai, camera và thiết bị IoT mới tính ở mức dự kiến.
+    \item Chưa hoàn thành mô phỏng và kiểm thử hệ thống do hạn chế về thời gian, nên các đánh giá hiện ở mức thiết kế.
+\end{itemize}
+
+\subsection{Định hướng phát triển}
+Trong tương lai, hệ thống có thể được nâng cấp kết nối WAN lên MPLS hoặc SD-WAN kèm đường truyền dự phòng cho các cơ sở phụ, triển khai gateway redundancy (HSRP/VRRP) và hoàn thiện kế hoạch địa chỉ cho camera cùng các thiết bị IoT, y tế.

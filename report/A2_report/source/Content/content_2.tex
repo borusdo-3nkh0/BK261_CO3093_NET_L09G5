@@ -1,10 +1,148 @@
-\section{Thiết kế kiến trúc mạng}
+\section{Phân tích yêu cầu hệ thống mạng}
+Công ty Tư vấn Máy tính \& Xây dựng (CCC) được yêu cầu thiết kế một mạng lưới máy tính triển khai ở trụ sở chính (TP. Hồ Chí Mình) và 2 cơ sở phụ (đường Điện Biên Phủ và đường Bà Huyện Thanh Quan) cho một bệnh viện đang được xây dựng.
 
-\subsection{Danh sách thiết bị và thông số}
+\subsection{Tổng quan các cơ sở triển khai}
+\subsubsection{Trụ sở chính}
+Quy mô của trụ sở chính:
+\begin{itemize}
+    \item 2 tòa nhà A và B, mỗi tòa 5 tầng, mỗi tầng 10 phòng.
+    \item 600 máy trạm (workstation).
+    \item 10 máy chủ (server).
+    \item Tối thiểu 12 thiết bị mạng, chưa bao gồm các thiết bị bảo mật đặc thù.
+\end{itemize}
 
-\subsection{VLAN + IP plan}
+Trung tâm dữ liệu (data center), phòng IT, và phòng cáp trung tâm (cabling central local) được bố trí tách biệt, cách khu vực tòa A và B khoảng 50m.
 
-\subsection{Sơ đồ vật lý/cabling}
+Kết nối không dây phải phủ sóng cho toàn bộ khu vực trụ sở.
 
-\subsection{WAN}
+\subsubsection{Cơ sở ĐBP và BHTQ}
+Quy mô cho từng cơ sở:
+\begin{itemize}
+    \item 260 máy trạm (workstation).
+    \item 2 máy chủ (server).
+    \item Tối thiểu 5 thiết bị mạng.
+\end{itemize}
+
+Tòa nhà cở sở ĐBP và BHTQ có 2 tầng, tầng 1 gồm 1 phòng IT và 1 phòng cáp trung tâm.
+
+\subsection{Yêu cầu hạ tầng mạng}
+Sử dụng các công nghệ mạng được yêu cầu cho cơ sở hạ tầng mạng:
+\begin{itemize}
+    \item Kết nối có dây và không dây.
+    \item Cáp sợi quang (GPON).
+    \item Giga Ethernet các tốc độ 1GbE, 10GbE hoặc 40GbE.
+    \item VLAN dùng phân chia mạng theo từng Khoa/Phòng ban.
+\end{itemize}
+
+Kết nối WAN và Internet:
+\begin{itemize}
+    \item Trụ sở chính kết nối với cơ sở ĐBP và BHTQ bằng 2 kênh truyền riêng (leased line).
+    \item Định tuyến giữa các cơ sở sử dụng giao thức định tuyến động OSPF (Open Shortest Path First).
+    \item Có thể dùng SD-WAN hoặc MPLS để triển khai kết nối WAN.
+    \item Trụ sở chính dùng kết nối Dual DSL (2xDSL) đến Internet, có cơ chế cân bằng tải (load balancing). Tất cả lưu lượng truy cập vào Internet đều đi qua trụ sở chính.
+    \item Đề xuất cấu hình VPN kết nối site-to-site và kết nối từ xa (remote access) vào mạng LAN của bệnh viện.
+    \item Đề xuất hệ thống camera giám sát cho bệnh viện.
+\end{itemize}
+
+
+\subsection{Yêu cầu ứng dụng và dịch vụ}
+Bệnh viện sử dụng kết hợp các phần mềm được cấp phép và các phần mềm có mã nguồn mở gồm:
+\begin{itemize}
+    \item Các phần mềm hệ thống bệnh viện: HIS, RIS - PACS, LIS, CRM, etc.
+    \item Ứng dụng văn phòng.
+    \item Ứng dụng client-server.
+    \item Ứng dụng đa phương tiện.
+    \item Cơ sở dữ liệu.
+\end{itemize}
+
+
+\subsection{Yêu cầu phi chức năng}
+Hệ thống cần đáp ứng các yêu cầu phi chức năng như sau:
+\begin{itemize}
+    \item Khả năng mở rộng hệ thống mạng.
+    \item Bảo mật cao: tường lửa.
+    \item Tính sẵn sàng cao (High Availability - HA).
+    \item Khả năng phục hồi khi xảy ra sự cố.
+    \item Khả năng nâng cấp hệ thống.
+\end{itemize}
+
+\subsection{Yêu cầu phân vùng mạng và bảo mật}
+Theo đề bài, hệ thống mạng cần đáp ứng:
+\begin{itemize}
+    \item Thiết kế môi trường sử dụng mạng không dây (wireless), áp dụng các tiêu chuẩn bảo mật mạng (network security standards).
+    \item Thiết lập các phân vùng riêng cho máy chủ và thiết bị mạng: vùng máy chủ (server farm), vùng DMZ và tường lửa (firewall).
+    \item Thiết bị của khách hàng không được kết nối đến các máy trạm trong mạng LAN của bệnh viện.
+\end{itemize}
+
+\subsection{Yêu cầu kiểm thử hệ thống}
+Hệ thống được mô phỏng bằng Packet Tracer hoặc GNS3 và kiểm tra bằng các công cụ phổ biến như \texttt{ping}, \texttt{traceroute}. Các kịch bản kết nối cần kiểm tra gồm:
+\begin{itemize}
+    \item Kết nối giữa các máy trạm trong cùng VLAN.
+    \item Kết nối giữa các máy trạm thuộc các VLAN khác nhau.
+    \item Kết nối giữa trụ sở chính và hai cở sở ĐBP và BHTQ.
+    \item Kết nối đến các máy chủ trong vùng DMZ.
+    \item Thiết bị của khách hàng không kết nối được đến máy trạm trong mạng LAN.
+    \item Kết nối ra Internet đến một máy chủ Web.
+\end{itemize}
+
+\subsection{Phân tích workload và giờ cao điểm}
+Hệ thống mạng của bệnh viện có khối lượng lưu lượng dữ liệu tập trung chủ yếu vào hai khoảng thời gian cao điểm trong ngày, bao gồm 9:00--11:00 và 15:00--16:00. Ước tính khoảng 80\% workload của hệ thống phát sinh trong các khoảng thời gian này.
+
+Các thông số lưu lượng được cung cấp như sau:
+\begin{itemize}
+    \item Máy chủ (server):
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 1000 MB/ngày.
+        \item Lưu lượng tải lên (upload): 2000 MB/ngày.
+    \end{itemize}
+
+    \item Mỗi máy trạm (workstation):
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 500 MB/ngày.
+        \item Lưu lượng tải lên (upload): 100 MB/ngày.
+    \end{itemize}
+    
+    \item Thiết bị của khách hàng kết nối với WiFi:
+    \begin{itemize}
+        \item Lưu lượng tải xuống (download): 500 MB/ngày.
+    \end{itemize}
+\end{itemize}
+
+Ngoài ra, hệ thống được dự kiến có mức tăng trưởng khoảng 20\% trong vòng 5 năm. Do đó, thiết kế mạng cần tính đến khả năng mở rộng băng thông, năng lực xử lý của các thiết bị mạng và khả năng đáp ứng lưu lượng gia tăng trong tương lai.
+
+\subsection{Xác định vùng có tải mạng cao}
+Dựa trên quy mô triển khai và các ứng dụng được sử dụng trong bệnh viện, một số khu vực có khả năng phát sinh lưu lượng mạng lớn cần được xem xét:
+
+\begin{itemize}
+    \item \textbf{Trung tâm dữ liệu (data center)}: Nơi tập trung các máy chủ và dịch vụ dùng chung của bệnh viện (HIS, RIS-PACS, LIS và cơ sở dữ liệu). Lưu lượng truy cập và trao đổi dữ liệu giữa máy trạm với máy chủ có thể phát sinh tải mạng đáng kể.
+    \item \textbf{Khu vực chẩn đoán hình ảnh}: Các hệ thống RIS-PACS phục vụ việc lưu trữ, truy xuất và trao đổi hình ảnh y tế. Những dữ liệu này có kích thước lớn, do đó cần xem xét nhu cầu băng thông và tốc độ kết nối tại khu vực này.
+    \item \textbf{Các khoa/phòng ban có mật độ mát trạm cao}: Nhiều máy trạm hoạt động đồng thời và truy cập các hệ thống bệnh viện có thể làm gia tăng lưu lượng mạng cục bộ cũng như lưu lượng đến trung tâm dữ liệu.
+    \item \textbf{Kết nối WiFi từ khách hàng}: Số lượng thiết bị cá nhân kết nối đồng thời có thể tạo ra lưu lượng Internet đáng kể. Cần xem xét mật độ thiết bị và khả năng đáp ứng của hệ thống WiFi.
+\end{itemize}
+
+Các khu vực trên sẽ được ưu tiên xem xét khi phân bổ băng thông và lựa chọn cấu hình thiết bị mạng ở các phần thiết kế tiếp theo.
+
+\subsection{Mạng không dây}
+Theo yêu cầu của đề, mạng không dây phủ sóng toàn bộ khu vực trụ sở chính. Các điểm truy cập không dây (access point -- AP) được bố trí ở từng tầng của hai tòa A và B, kết nối vào access switch của tầng và được cấp nguồn qua PoE. Hệ thống tách hai nhóm người dùng bằng hai SSID gắn với hai VLAN riêng: SSID dành cho nhân viên sử dụng cơ chế bảo mật WPA2/WPA3; SSID dành cho khách hàng (bệnh nhân, người nhà) chỉ cho phép truy cập Internet và bị chặn truy cập vào mạng LAN của bệnh viện bằng ACL và firewall. Lưu lượng của khách (giả định 400 thiết bị) được tính vào băng thông Internet ở phần tính toán lưu lượng. Số lượng và vị trí AP cụ thể sẽ được xác định bằng khảo sát sóng (RF survey) khi triển khai thực tế.
+
+
+\subsection{Checklist khảo sát}
+Do không có điều kiện khảo sát trực tiếp tại bệnh viện, nhóm thay thế bằng cách nghiên cứu tài liệu kỹ thuật và thông tin về hạ tầng mạng bệnh viện trên mạng, đồng thời trao đổi, tham khảo ý kiến của một số bạn bè có hiểu biết về mạng máy tính và hệ thống, kiến trúc bệnh viện thực tế. Từ đó, nhóm xây dựng checklist dưới đây, liệt kê các hạng mục cần khảo sát tại trụ sở chính (main site) và hai cơ sở phụ khi triển khai thực tế:
+\begin{itemize}
+    \item \textbf{Mặt bằng và kiến trúc}: sơ đồ từng tầng, vị trí phòng IT, data center và phòng cáp trung tâm, vật liệu tường, trần, sàn.
+    \item \textbf{Đường đi cáp (cabling pathway)}: trục đứng (riser), máng cáp, ống luồn cáp, tuyến cáp quang giữa các tòa, vị trí tủ phân phối cáp từng tầng.
+    \item \textbf{Nguồn điện và môi trường}: nguồn điện, UPS, tiếp địa (grounding), làm mát (cooling) và thông gió tại phòng server và tủ cáp.
+    \item \textbf{Kết nối WAN và Internet}: điểm vào đường truyền, điểm phân giới với nhà mạng (demarcation point), khả năng cung cấp đường DSL và leased line.
+    \item \textbf{Mạng không dây}: khảo sát sóng (RF survey) về vị trí đặt AP, vùng phủ, nhiễu và vật cản.
+    \item \textbf{An ninh và an toàn}: vị trí camera giám sát, kiểm soát ra vào phòng IT và data center, hệ thống phòng cháy chữa cháy.
+    \item \textbf{Đặc thù bệnh viện}: tường chì tại phòng chẩn đoán hình ảnh, nhiễu điện từ (EMI) từ thiết bị y tế, hạn chế thi công ở khu mổ và hồi sức do kiểm soát nhiễm khuẩn.
+\end{itemize}
+
+
+
+
+
+
+
+
 
