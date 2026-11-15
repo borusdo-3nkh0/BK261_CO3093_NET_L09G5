@@ -124,7 +124,7 @@ Chính sách truy cập giữa các vùng:
 
     \item \textbf{Server}
     \begin{itemize}
-        \item \textbf{Vai trò:} Theo phân bổ của nhóm (xem lưu ý).
+        \item \textbf{Vai trò:} Theo phân bổ của nhóm (PIS, CRM (ĐBP); FIS, DR (BHTQ)).
         \item \textbf{Thông số điển hình:} NIC $\geq$ 2 cổng GE, nguồn dự phòng.
     \end{itemize}
 
@@ -151,7 +151,7 @@ VLAN ID gồm ba chữ số theo dạng [tòa/cơ sở][tầng][thứ tự khoa/
 Mỗi khoa/phòng ban (hoặc nhóm khoa/phòng ban) được gán một VLAN và một mạng con riêng. Độ dài prefix được chọn theo số máy trạm sau khi cộng dự phòng tăng trưởng 20\% (làm tròn lên). Trong mỗi mạng con, địa chỉ \texttt{.1} là default gateway, \texttt{.2} và \texttt{.3} được để dành cho giao thức dự phòng gateway (FHRP), các thiết bị đầu cuối được cấp từ \texttt{.4} trở đi, địa chỉ cuối dùng cho broadcast.
 
 \subsubsection{Trụ sở chính - Tòa A:}
-Các VLAN tại Tòa A được quy hoạch theo từng khu vực chức năng, bao gồm các phòng CTXH và thu viện phí, phòng khám tổng hợp/chuyên môn và khu vực điều dưỡng, nội trú.
+Các VLAN tại Tòa B được quy hoạch theo từng khu vực chức năng, bao gồm các phòng CTXH và thu viện phí, phòng khám tổng hợp/chuyên môn và khu vực điều dưỡng, nội trú.
 
 \begin{table}[H]
     \centering
@@ -505,7 +505,7 @@ Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm 
     \caption{Danh sách VLAN của chi nhánh BHTQ}
 \end{table}
 
-\subsubsection{Cấp phát địa chỉ}
+\subsubsection{Địa chỉ các máy chủ}
 Địa chỉ IP của các workstation được cấp phát động theo giao thức DHCP. Dịch vụ DHCP được đặt trên máy chủ hạ tầng INFRA\_1 (VLAN 505), INFRA\_2 là bản dự phòng. Địa chỉ IP của các server được cấp phát tĩnh theo Bảng Địa chỉ IP tĩnh của các máy chủ. Địa chỉ của thiết bị mạng (VLAN quản lý) được cấp tĩnh, địa chỉ camera được cấp tĩnh. Giao thức FHRP dùng cho các địa chỉ \texttt{.2} và \texttt{.3} dự phòng.
 
 \begin{table}[H]
@@ -572,7 +572,7 @@ Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm 
     \caption{Địa chỉ IP tĩnh của các máy chủ}
 \end{table}
 
-\subsection{Sơ đồ vật lý}
+\subsection{Sơ đồ kiến trúc mạng}
 \begin{figure}[H]
     \centering
     \resizebox{\textwidth}{!}{%
@@ -638,7 +638,7 @@ Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm 
     \node[server] (branches) at (6.2,8.5)
         {Cở sở\\ĐBP và BHTQ};
 
-    \node[note] at (3.5,10.2) {Cân bằng tải};
+    \node[note] at (3,10.2) {Cân bằng tải};
 
     % ==========================================
     % FIREWALL
@@ -859,7 +859,7 @@ Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm 
 
     \end{tikzpicture}%
     }
-    \caption{Sơ đồ kiến trúc mạng tại trụ sở chính và các tòa nhà}
+    \caption{Sơ đồ trụ sở chính và các tòa nhà}
 \end{figure}
 
 \begin{figure}[H]
@@ -940,13 +940,11 @@ Khu hạ tầng trung tâm gồm phòng IT, data center, phòng cáp trung tâm 
 
     \end{tikzpicture}%
     }
-    \caption{Sơ đồ kết nối mạng tại cơ sở ĐBP và BHTQ}
+    \caption{Sơ đồ các cơ sở ĐBP và BHTQ}
 \end{figure}
-
 
 \subsection{Kết nối WAN}
 Trụ sở chính kết nối với hai cơ sở ĐBP và BHTQ bằng các kênh truyền riêng (leased line). Mỗi cơ sở phụ có một router biên WAN kết nối về edge router của trụ sở chính; toàn bộ lưu lượng truy cập Internet của cơ sở phụ đi qua trụ sở chính, nơi có kết nối Dual DSL kèm cân bằng tải (load balancing). Định tuyến giữa ba cơ sở sử dụng giao thức OSPF.
-
 
 \begin{figure}[H]
     \centering
