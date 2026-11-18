@@ -1,2 +1,108 @@
 \section{Kiểm thử hệ thống}
-Do giới hạn thời gian, phần kiểm thử bằng các công cụ ping và traceroute trên hệ thống mô phỏng chưa được thực hiện tại thời điểm nộp báo cáo, nên báo cáo không đưa ra kết quả kiểm thử. Các kịch bản kết nối cần kiểm tra theo yêu cầu của đề đã được nêu ở mục yêu cầu kiểm thử hệ thống; nhóm sẽ thực hiện các kịch bản này khi hoàn thiện mô phỏng.
+Nhóm tiến hành kiểm thử hệ thống mô phỏng theo 4 kịch bản trọng tâm nhằm xác minh khả năng định tuyến nội bộ, dự phòng Gateway, kết nối WAN liên cơ sở, truy cập DMZ/Internet và chính sách bảo mật phân vùng.
+
+\subsection{Kiểm thử kết nối nội bộ LAN, Inter-VLAN và dự phòng HSRP}
+Thực hiện kiểm tra trên máy trạm \texttt{PC-CAPCUU} (thuộc VLAN 210 -- Khoa Cấp cứu, Tòa B, IP \texttt{10.2.1.4}) hướng tới Gateway ảo HSRP (\texttt{10.2.1.1}) và máy chủ hạ tầng \texttt{INFRA\_1} (\texttt{10.5.5.4}) tại Server Farm. Kết quả đạt 0\% mất gói tin; đồng thời lệnh \texttt{show standby brief} trên \texttt{CORE1} xác nhận trạng thái dự phòng HSRP hoạt động ổn định.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Assets/map_lan.png}
+    \caption{Vị trí thiết bị kiểm thử nội bộ LAN và Inter-VLAN (\texttt{PC-CAPCUU} $\rightarrow$ \texttt{INFRA\_1})}
+    \label{fig:map_lan}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Assets/test_lan.png}
+    \caption{Kết quả kiểm thử \texttt{ipconfig} và \texttt{ping} từ \texttt{PC-CAPCUU} tới Gateway và \texttt{INFRA\_1}}
+    \label{fig:test_lan}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Assets/test_hsrp.png}
+    \caption{Trạng thái dự phòng Gateway HSRP (\texttt{show standby brief}) trên \texttt{CORE1}}
+    \label{fig:test_hsrp}
+\end{figure}
+
+\subsection{Kiểm thử định tuyến WAN OSPF từ cơ sở phụ}
+Thực hiện \texttt{ping} và \texttt{tracert} từ máy trạm \texttt{PC-DBP-KHAM} tại Cơ sở ĐBP về máy chủ \texttt{INFRA\_1} (\texttt{10.5.5.4}) tại Trụ sở chính. Gói tin định tuyến thông suốt qua \texttt{R-DBP} vào lõi Trụ sở chính và bảng định tuyến OSPF trên \texttt{R-DBP} học đầy đủ các phân mạng đích.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Assets/map_wan.png}
+    \caption{Vị trí thiết bị kiểm thử định tuyến WAN OSPF (\texttt{PC-DBP-KHAM} $\rightarrow$ \texttt{INFRA\_1})}
+    \label{fig:map_wan}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Assets/test_wan.png}
+    \caption{Kết quả kiểm thử \texttt{ping} và \texttt{tracert} từ Cơ sở ĐBP về Trụ sở chính}
+    \label{fig:test_wan}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{Assets/test_ospf.png}
+    \caption{Bảng định tuyến động OSPF (\texttt{show ip route ospf}) trên \texttt{R-DBP}}
+    \label{fig:test_ospf}
+\end{figure}
+
+\subsection{Kiểm thử truy cập vùng DMZ và Internet}
+Từ máy trạm nội bộ \texttt{PC-CTXH} (Tòa A), thực hiện kiểm tra kết nối tới máy chủ web vùng DMZ (\texttt{DMZ\_WEB} -- \texttt{10.5.6.4}) và máy chủ giả lập Internet (\texttt{Internet-Web} -- \texttt{8.8.8.8}). Cả hai đích đều phản hồi ổn định với 0\% mất gói.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Assets/map_dmz.png}
+    \caption{Vị trí thiết bị kiểm thử truy cập DMZ và Internet (\texttt{PC-CTXH} $\rightarrow$ \texttt{DMZ\_WEB}, \texttt{Internet-Web})}
+    \label{fig:map_dmz}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Assets/test_dmz.png}
+    \caption{Kết quả kiểm thử truy cập vùng DMZ (\texttt{10.5.6.4}) và Internet (\texttt{8.8.8.8})}
+    \label{fig:test_dmz}
+\end{figure}
+
+\subsection{Kiểm thử chính sách bảo mật và cô lập phân vùng (Extended ACL)}
+Kiểm tra chính sách lọc gói trên thiết bị y tế \texttt{PC-IOT-BED} (Tòa B): thiết bị được phép gửi dữ liệu về máy chủ ứng dụng \texttt{APP\_1} (\texttt{10.5.2.4}) nhưng bị chặn hoàn toàn khi truy cập trái phép vào vùng hạ tầng quản trị \texttt{INFRA\_1} (\texttt{10.5.5.4}) với thông báo \texttt{Destination host unreachable}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{Assets/map_acl.png}
+    \caption{Vị trí thiết bị kiểm thử Extended ACL (\texttt{PC-IOT-BED} được phép tới \texttt{APP\_1}, bị chặn tới \texttt{INFRA\_1})}
+    \label{fig:map_acl}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Assets/test_acl.png}
+    \caption{Kết quả kiểm thử chính sách Extended ACL cô lập thiết bị IoT trên \texttt{PC-IOT-BED}}
+    \label{fig:test_acl}
+\end{figure}
+
+\subsection{Tổng hợp kết quả kiểm thử}
+\begin{table}[H]
+    \centering
+    \small
+    \renewcommand{\arraystretch}{1.35}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{4cm}
+        >{\raggedright\arraybackslash}p{4.5cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Kịch bản kiểm thử} & \textbf{Nguồn $\rightarrow$ Đích} & \textbf{Kết quả thực tế} \\
+        \midrule
+        LAN, Inter-VLAN \& HSRP & \texttt{PC-CAPCUU} $\rightarrow$ \texttt{10.2.1.1}, \texttt{10.5.5.4} & Đạt (\texttt{Reply}, 0\% loss; HSRP Active/Standby) \\
+        Định tuyến WAN OSPF & \texttt{PC-DBP-KHAM} $\rightarrow$ \texttt{10.5.5.4} & Đạt (\texttt{Reply}, 0\% loss; \texttt{tracert} thông suốt) \\
+        Truy cập DMZ \& Internet & \texttt{PC-CTXH} $\rightarrow$ \texttt{10.5.6.4}, \texttt{8.8.8.8} & Đạt (\texttt{Reply}, 0\% loss) \\
+        Bảo mật Extended ACL & \texttt{PC-IOT-BED} $\rightarrow$ \texttt{10.5.2.4} / \texttt{10.5.5.4} & Đạt (Cho phép \texttt{APP\_1}, chặn \texttt{INFRA\_1}) \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Tổng hợp kết quả kiểm thử trên hệ thống mô phỏng}
+\end{table}

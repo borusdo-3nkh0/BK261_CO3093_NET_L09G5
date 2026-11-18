@@ -54,9 +54,9 @@ Kết nối Internet dùng hai đường DSL cân bằng tải, mỗi đường 
     \item Mỗi site phụ chỉ có một đường leased line về main site, nên vẫn còn SPOF.
     \item Kết nối WAN hiện chỉ sử dụng kênh truyền riêng (leased line), chưa triển khai các công nghệ WAN hiện đại như MPLS hoặc SD-WAN do giới hạn thời gian thực hiện. Mỗi cơ sở phụ chỉ có một đường truyền về trụ sở chính nên tồn tại điểm lỗi đơn (single point of failure) ở kết nối WAN.
     \item Tốc độ đường truyền tính theo trường hợp xấu nhất và giả định số thiết bị khách; thực tế DSL có thể thấp hơn.
-    \item Gateway redundancy (HSRP/VRRP) chỉ mới ở mức chuẩn bị và chưa được triển khai, camera và thiết bị IoT mới tính ở mức dự kiến.
-    \item Chưa hoàn thành mô phỏng và kiểm thử hệ thống do hạn chế về thời gian, nên các đánh giá hiện ở mức thiết kế.
+    \item Trong môi trường mô phỏng Packet Tracer, lớp tường lửa biên hiện sử dụng Switch Layer 3 kèm Extended ACL thay cho Stateful Firewall chuyên dụng (như Cisco ASA/FortiGate) và chưa triển khai Remote Access VPN.
+    \item Do giới hạn của phần mềm mô phỏng, mỗi khu vực chỉ dựng các máy trạm và VLAN đại diện; các máy chủ chuyên biệt tại cơ sở phụ (\texttt{SRV-PIS}, \texttt{SRV-CRM}, \texttt{SRV-FIS}, \texttt{SRV-DR}) mới dừng ở mức quy hoạch vị trí đấu nối.
 \end{itemize}
 
 \subsection{Định hướng phát triển}
-Trong tương lai, hệ thống có thể được nâng cấp kết nối WAN lên MPLS hoặc SD-WAN kèm đường truyền dự phòng cho các cơ sở phụ, triển khai gateway redundancy (HSRP/VRRP) và hoàn thiện kế hoạch địa chỉ cho camera cùng các thiết bị IoT, y tế.
+Trong tương lai, hệ thống có thể được nâng cấp kết nối WAN lên MPLS hoặc SD-WAN kèm đường truyền dự phòng độc lập cho các cơ sở phụ, thay thế lớp lọc gói biên bằng Stateful Firewall chuyên dụng kết hợp Remote Access VPN, và hoàn thiện quy hoạch địa chỉ chi tiết cho toàn bộ thiết bị IoT, y tế khi triển khai thực tế.
